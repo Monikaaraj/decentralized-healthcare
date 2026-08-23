@@ -1,0 +1,6 @@
+data/synthea/*.csv
+data/processed/*.csv
+data/hospitals/**/*.csv
+__pycache__/
+*.joblib
+models/local/*.joblib
