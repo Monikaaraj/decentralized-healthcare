@@ -25,6 +25,15 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
     }
   };
 
+  // Address Registry mapping for production-like UX
+  const resolveAddress = (idOrAddress: string) => {
+    const registry: Record<string, string> = {
+      "PAT-001": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "PAT-002": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+    };
+    return registry[idOrAddress.toUpperCase()] || idOrAddress;
+  };
+
   const handleEncryptAndUploadForPatient = async () => {
     if (!uploadFileData || !uploadSecretKey || !uploadPatientAddress) return alert("Missing file, key, or patient address");
     setUploadStatus("Encrypting locally with AES-256...");
@@ -37,7 +46,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
       const cid = await uploadToIPFS(encrypted);
       
       setUploadStatus("Anchoring to blockchain on behalf of patient...");
-      const tx = await contract.addRecordForPatient(uploadPatientAddress, cid);
+      const resolvedAddress = resolveAddress(uploadPatientAddress);
+      const tx = await contract.addRecordForPatient(resolvedAddress, cid);
       await tx.wait();
       setUploadStatus(`Success! Record anchored to ${uploadPatientAddress}.`);
     } catch (err: any) {
@@ -51,7 +61,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
     setStatus("Verifying smart contract consent...");
     try {
       // Get CID from contract
-      const cid = await contract.getRecord(patientAddress, parseInt(recordId));
+      const resolvedAddress = resolveAddress(patientAddress);
+      const cid = await contract.getRecord(resolvedAddress, parseInt(recordId));
       setStatus(`Consent verified! Fetching CID: ${cid} from IPFS...`);
       
       const encryptedBlob = await fetchFromIPFS(cid);
@@ -79,12 +90,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
             <UploadCloud size={20} /> Upload Lab Report for Patient
           </h3>
-          <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="Patient Wallet Address (0x...)" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-            <button onClick={() => setUploadPatientAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")} className="px-4 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors text-sm">
-              Use Demo Patient
-            </button>
-          </div>
+          <p className="text-sm text-gray-400 mb-2">Enter Patient ID (e.g. PAT-001)</p>
+          <input type="text" placeholder="Patient ID or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
           <input type="password" placeholder="AES Secret Key (Share this with patient out-of-band)" value={uploadSecretKey} onChange={(e) => setUploadSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
           <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
@@ -98,12 +105,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
             <LockOpen size={20} /> Decrypt Existing Record
           </h3>
-          <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="Patient Wallet Address (0x...)" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-            <button onClick={() => setPatientAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")} className="px-4 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors text-sm">
-              Use Demo Patient
-            </button>
-          </div>
+          <p className="text-sm text-gray-400 mb-2">Enter Patient ID (e.g. PAT-001)</p>
+          <input type="text" placeholder="Patient ID or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="password" placeholder="Patient's Provided Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           
