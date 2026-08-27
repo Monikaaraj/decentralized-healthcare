@@ -8,6 +8,7 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
   // Marketplace State
   const [hlthBalance, setHlthBalance] = useState<string>("0");
   const [bounties, setBounties] = useState<any[]>([]);
+  const [purchasedData, setPurchasedData] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState<string>("");
   
   const [newBountyDesc, setNewBountyDesc] = useState("");
@@ -35,6 +36,8 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
       // Fetch all bounties
       const totalBounties = await marketplaceContract.nextBountyId();
       const loadedBounties = [];
+      const myBountyIds = new Set();
+      
       for (let i = 0; i < Number(totalBounties); i++) {
         const bounty = await marketplaceContract.bounties(i);
         if (bounty.isActive) {
@@ -46,8 +49,29 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
             remainingEscrow: ethers.formatUnits(bounty.remainingEscrow, 18)
           });
         }
+        if (bounty.creator.toLowerCase() === account.toLowerCase()) {
+          myBountyIds.add(i);
+        }
       }
       setBounties(loadedBounties);
+
+      // Fetch purchased data (fulfilled bounties) via events
+      const filter = marketplaceContract.filters.BountyFulfilled();
+      const events = await marketplaceContract.queryFilter(filter, 0, "latest");
+      
+      const loadedData = [];
+      for (const event of events) {
+        const bId = Number(event.args[0]);
+        if (myBountyIds.has(bId)) {
+          loadedData.push({
+            bountyId: bId,
+            patient: event.args[1],
+            cid: event.args[2],
+            price: ethers.formatUnits(event.args[3], 18)
+          });
+        }
+      }
+      setPurchasedData(loadedData);
     } catch (err) {
       console.error("Error fetching marketplace data:", err);
     }
@@ -152,7 +176,7 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
         {bounties.length === 0 ? (
           <p className="text-gray-500 italic text-center py-8">No bounties are currently active.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
             {bounties.map((item) => (
               <div key={item.id} className="p-4 bg-white/5 border border-white/10 rounded-xl hover:border-indigo-500/50 transition-colors">
                 <p className="text-xs text-gray-500 mb-2">Creator: {item.creator.substring(0,6)}...{item.creator.substring(38)}</p>
@@ -169,6 +193,23 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
                      <span className="block text-xs text-gray-500">Escrow Remaining</span>
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3 className="text-lg font-semibold text-white mb-4">Data Provided by Patients (Fulfilled Bounties)</h3>
+        {purchasedData.length === 0 ? (
+          <p className="text-gray-500 italic text-center py-8">Patients have not fulfilled any of your bounties yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {purchasedData.map((item, index) => (
+              <div key={index} className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
+                <p className="text-xs text-gray-400 mb-2">Bounty #{item.bountyId} | Patient: {item.patient.substring(0,6)}...</p>
+                <p className="text-sm font-mono text-emerald-400 mb-2 bg-black/40 p-2 rounded truncate" title={item.cid}>
+                  CID: {item.cid}
+                </p>
+                <p className="text-xs text-indigo-300 italic">This data is heavily encrypted. Only the ML training node can decrypt it during federated learning.</p>
               </div>
             ))}
           </div>
