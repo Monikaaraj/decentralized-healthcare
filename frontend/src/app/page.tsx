@@ -36,10 +36,10 @@ const TOKEN_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// Addresses from local hardhat deployment
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; 
-const TOKEN_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const MARKETPLACE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+// Addresses from public Sepolia deployment
+const CONTRACT_ADDRESS = "0x8aeECD13EAFed869e18655ba471D23a2906E5C62"; 
+const TOKEN_ADDRESS = "0xcF57f721fc8a6C91ADdF1A014E1494eC700947Dc";
+const MARKETPLACE_ADDRESS = "0xf0E5200c8A288Cd7EE5B0296bAeF5757fC983321";
 
 export default function Home() {
   const [account, setAccount] = useState<string>("");
@@ -92,11 +92,11 @@ export default function Home() {
   const connectWallet = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
       try {
-        // Force MetaMask to switch to Localhost 8545 (Chain ID 1337 / 0x539)
+        // Force MetaMask to switch to Sepolia (Chain ID 11155111 / 0xaa36a7)
         try {
           await (window as any).ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x539' }], 
+            params: [{ chainId: '0xaa36a7' }], 
           });
         } catch (switchError: any) {
           // If the network is not added to MetaMask, add it automatically
@@ -105,9 +105,9 @@ export default function Home() {
               method: 'wallet_addEthereumChain',
               params: [
                 {
-                  chainId: '0x539',
-                  chainName: 'Localhost 8545',
-                  rpcUrls: ['http://127.0.0.1:8545'],
+                  chainId: '0xaa36a7',
+                  chainName: 'Sepolia test network',
+                  rpcUrls: ['https://rpc.sepolia.org'],
                 }
               ]
             });
