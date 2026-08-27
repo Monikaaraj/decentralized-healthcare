@@ -7,7 +7,7 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   const [patientAddress, setPatientAddress] = useState("");
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
   const [status, setStatus] = useState("");
-  const [records, setRecords] = useState<{id: number, cid: string}[]>([]);
+  const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
 
   // Upload State
   const [uploadFileData, setUploadFileData] = useState<string>("");
@@ -73,8 +73,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
       const count = await contract.getRecordCount(resolvedAddress);
       const loadedRecords = [];
       for (let i = 0; i < Number(count); i++) {
-        const cid = await contract.getRecord(resolvedAddress, i);
-        loadedRecords.push({ id: i, cid });
+        const recordData = await contract.getRecord(resolvedAddress, i);
+        loadedRecords.push({ id: i, cid: recordData[0], uploader: recordData[1] });
       }
       setRecords(loadedRecords);
       setStatus(`Loaded ${count} records for patient.`);
@@ -138,16 +138,28 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
 
           {records.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
-              {records.map((record) => (
-                <button 
-                  key={record.id}
-                  onClick={() => handleViewRecord(record.cid)}
-                  className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-2 group"
-                >
-                  <FileText className="text-emerald-400 group-hover:scale-110 transition-transform" size={24} />
-                  <span className="text-sm font-medium text-emerald-100">Record #{record.id}</span>
-                </button>
-              ))}
+              {records.map((record) => {
+                const isDoctor = record.uploader.toLowerCase() !== resolveAddress(patientAddress).toLowerCase();
+                const btnClass = isDoctor
+                  ? "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20"
+                  : "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20";
+                const iconColor = isDoctor ? "text-blue-400" : "text-emerald-400";
+                const textColor = isDoctor ? "text-blue-100" : "text-emerald-100";
+
+                return (
+                  <button 
+                    key={record.id}
+                    onClick={() => handleViewRecord(record.cid)}
+                    className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
+                  >
+                    <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
+                    <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
+                    <span className={`text-xs ${isDoctor ? 'text-blue-400/70' : 'text-emerald-400/70'}`}>
+                      By {isDoctor ? 'Doctor' : 'Patient'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
 

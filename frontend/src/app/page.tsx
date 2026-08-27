@@ -15,7 +15,7 @@ const CONTRACT_ABI = [
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
   "function getPatientRecords(address _patient) public view returns (string[] memory)",
-  "function getRecord(address _patient, uint256 _recordId) external view returns (string memory)",
+  "function getRecord(address _patient, uint256 _recordId) external view returns (string memory cid, address uploader, uint256 timestamp)",
   "function getRecordCount(address _patient) external view returns (uint256)"
 ];
 

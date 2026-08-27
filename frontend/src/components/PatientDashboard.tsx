@@ -13,7 +13,7 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   const [sellPrice, setSellPrice] = useState<string>("");
   
   // For viewing records
-  const [records, setRecords] = useState<{id: number, cid: string}[]>([]);
+  const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
 
   const loadRecords = useCallback(async () => {
@@ -22,8 +22,8 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
       const count = await contract.getRecordCount(account);
       const loadedRecords = [];
       for (let i = 0; i < Number(count); i++) {
-        const cid = await contract.getRecord(account, i);
-        loadedRecords.push({ id: i, cid });
+        const recordData = await contract.getRecord(account, i);
+        loadedRecords.push({ id: i, cid: recordData[0], uploader: recordData[1] });
       }
       setRecords(loadedRecords);
     } catch (e) {
@@ -177,16 +177,28 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
             <div className="p-4 text-center text-gray-500 bg-black/20 rounded-lg border border-white/5">No records found. Upload one to get started!</div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-              {records.map((record) => (
-                <button 
-                  key={record.id}
-                  onClick={() => handleViewRecord(record.cid)}
-                  className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-2 group"
-                >
-                  <FileText className="text-emerald-400 group-hover:scale-110 transition-transform" size={24} />
-                  <span className="text-sm font-medium text-emerald-100">Record #{record.id}</span>
-                </button>
-              ))}
+              {records.map((record) => {
+                const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
+                const btnClass = isSelf 
+                  ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20" 
+                  : "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20";
+                const iconColor = isSelf ? "text-emerald-400" : "text-blue-400";
+                const textColor = isSelf ? "text-emerald-100" : "text-blue-100";
+                
+                return (
+                  <button 
+                    key={record.id}
+                    onClick={() => handleViewRecord(record.cid)}
+                    className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
+                  >
+                    <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
+                    <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
+                    <span className={`text-xs ${isSelf ? 'text-emerald-400/70' : 'text-blue-400/70'}`}>
+                      By {isSelf ? 'You' : 'Doctor'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
           

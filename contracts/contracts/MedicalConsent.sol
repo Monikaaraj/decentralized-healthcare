@@ -9,6 +9,7 @@ contract MedicalConsent is Ownable {
     struct Record {
         string cid;
         uint256 timestamp;
+        address uploader;
         bool exists;
     }
 
@@ -34,6 +35,7 @@ contract MedicalConsent is Ownable {
         patientRecords[msg.sender][recordId] = Record({
             cid: _cid,
             timestamp: block.timestamp,
+            uploader: msg.sender,
             exists: true
         });
         patientRecordCount[msg.sender]++;
@@ -49,6 +51,7 @@ contract MedicalConsent is Ownable {
         patientRecords[_patient][recordId] = Record({
             cid: _cid,
             timestamp: block.timestamp,
+            uploader: msg.sender,
             exists: true
         });
         patientRecordCount[_patient]++;
@@ -69,14 +72,15 @@ contract MedicalConsent is Ownable {
     }
 
     // Get a specific record (Only Patient or Consented Doctor can access)
-    function getRecord(address _patient, uint256 _recordId) external view returns (string memory) {
+    function getRecord(address _patient, uint256 _recordId) external view returns (string memory cid, address uploader, uint256 timestamp) {
         require(
             msg.sender == _patient || consent[_patient][msg.sender],
             "Access Denied: No consent from patient"
         );
         require(patientRecords[_patient][_recordId].exists, "Record does not exist");
         
-        return patientRecords[_patient][_recordId].cid;
+        Record memory rec = patientRecords[_patient][_recordId];
+        return (rec.cid, rec.uploader, rec.timestamp);
     }
 
     // Get total records for a patient
