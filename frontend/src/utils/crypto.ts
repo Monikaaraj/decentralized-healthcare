@@ -1,4 +1,15 @@
 import CryptoJS from "crypto-js";
+import { ethers } from "ethers";
+
+/**
+ * Deterministically generate a master AES key for a given patient address
+ */
+export const derivePatientKey = (patientAddress: string): string => {
+  if (!patientAddress) return "fallback_key";
+  const salt = "AEGIS_SECURE_VAULT_2026";
+  const hash = ethers.keccak256(ethers.toUtf8Bytes(patientAddress.toLowerCase() + salt));
+  return hash;
+};
 
 /**
  * Encrypts a string (e.g., base64 file data or JSON string) using AES-256

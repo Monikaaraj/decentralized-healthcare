@@ -1,19 +1,17 @@
 "use client";
 import { useState } from "react";
-import { fetchFromIPFS, decryptData, encryptData, uploadToIPFS } from "@/utils/crypto";
-import { FileSearch, LockOpen, UploadCloud } from "lucide-react";
+import { fetchFromIPFS, decryptData, encryptData, uploadToIPFS, derivePatientKey } from "@/utils/crypto";
+import { FileSearch, LockOpen, UploadCloud, FileText, Search } from "lucide-react";
 
 export default function DoctorDashboard({ contract, account }: { contract: any; account: string }) {
   const [patientAddress, setPatientAddress] = useState("");
-  const [recordId, setRecordId] = useState("0");
-  const [secretKey, setSecretKey] = useState("");
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [records, setRecords] = useState<{id: number, cid: string}[]>([]);
 
   // Upload State
   const [uploadFileData, setUploadFileData] = useState<string>("");
   const [uploadPatientAddress, setUploadPatientAddress] = useState("");
-  const [uploadSecretKey, setUploadSecretKey] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,18 +42,19 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   };
 
   const handleEncryptAndUploadForPatient = async () => {
-    if (!uploadFileData || !uploadSecretKey || !uploadPatientAddress) return alert("Missing file, key, or patient address");
+    if (!uploadFileData || !uploadPatientAddress) return alert("Missing file or patient address");
     setUploadStatus("Encrypting locally with AES-256...");
     
     // Encrypt
-    const encrypted = encryptData(uploadFileData, uploadSecretKey);
+    const resolvedAddress = resolveAddress(uploadPatientAddress);
+    const masterKey = derivePatientKey(resolvedAddress);
+    const encrypted = encryptData(uploadFileData, masterKey);
     
     setUploadStatus("Uploading encrypted blob to IPFS...");
     try {
       const cid = await uploadToIPFS(encrypted);
       
       setUploadStatus("Anchoring to blockchain on behalf of patient...");
-      const resolvedAddress = resolveAddress(uploadPatientAddress);
       const tx = await contract.addRecordForPatient(resolvedAddress, cid);
       await tx.wait();
       setUploadStatus(`Success! Record anchored to ${uploadPatientAddress}.`);
@@ -65,20 +64,36 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
     }
   };
 
-  const handleFetchRecord = async () => {
-    if (!patientAddress || !secretKey) return alert("Missing inputs");
-    setStatus("Verifying smart contract consent...");
+  const loadPatientRecords = async () => {
+    if (!patientAddress) return;
+    setStatus("Verifying consent and loading records...");
+    setRecords([]);
     try {
-      // Get CID from contract
       const resolvedAddress = resolveAddress(patientAddress);
-      const cid = await contract.getRecord(resolvedAddress, parseInt(recordId));
-      setStatus(`Consent verified! Fetching CID: ${cid} from IPFS...`);
-      
+      const count = await contract.getRecordCount(resolvedAddress);
+      const loadedRecords = [];
+      for (let i = 0; i < Number(count); i++) {
+        const cid = await contract.getRecord(resolvedAddress, i);
+        loadedRecords.push({ id: i, cid });
+      }
+      setRecords(loadedRecords);
+      setStatus(`Loaded ${count} records for patient.`);
+    } catch (err: any) {
+      console.error(err);
+      setStatus("Error loading records. Ensure the patient granted you access.");
+    }
+  };
+
+  const handleViewRecord = async (cid: string) => {
+    setStatus(`Fetching CID: ${cid} from IPFS...`);
+    try {
       const encryptedBlob = await fetchFromIPFS(cid);
       if (!encryptedBlob) throw new Error("Record not found in IPFS");
 
-      setStatus("Decrypting with provided patient key...");
-      const decrypted = decryptData(encryptedBlob, secretKey);
+      setStatus("Decrypting with patient's master key...");
+      const resolvedAddress = resolveAddress(patientAddress);
+      const masterKey = derivePatientKey(resolvedAddress);
+      const decrypted = decryptData(encryptedBlob, masterKey);
       setDecryptedData(decrypted);
       setStatus("Successfully decrypted patient record.");
     } catch (err: any) {
@@ -102,9 +117,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
           <input type="text" placeholder="Patient's Username or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
-          <input type="password" placeholder="AES Secret Key (Share this with patient out-of-band)" value={uploadSecretKey} onChange={(e) => setUploadSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
           <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-            Encrypt & Upload to Patient's Vault
+            Encrypt & Upload to Patient's Vault (Invisible Auth)
           </button>
           {uploadStatus && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{uploadStatus}</div>}
         </div>
@@ -112,16 +126,30 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
         {/* Fetch Record Section */}
         <div className="p-4 bg-white/5 rounded-xl border border-white/5">
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <LockOpen size={20} /> Decrypt Existing Record
+            <LockOpen size={20} /> View Patient Records
           </h3>
-          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
-          <input type="text" placeholder="Patient's Username or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
-          <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
-          <input type="password" placeholder="Patient's Provided Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
-          
-          <button onClick={handleFetchRecord} className="w-full py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors flex items-center justify-center gap-2">
-            <LockOpen size={20} /> Request & Decrypt Record
-          </button>
+          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13) to load their records.</p>
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="Patient's Username or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+            <button onClick={loadPatientRecords} className="px-6 py-3 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
+              <Search size={20} /> Load
+            </button>
+          </div>
+
+          {records.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+              {records.map((record) => (
+                <button 
+                  key={record.id}
+                  onClick={() => handleViewRecord(record.cid)}
+                  className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-2 group"
+                >
+                  <FileText className="text-emerald-400 group-hover:scale-110 transition-transform" size={24} />
+                  <span className="text-sm font-medium text-emerald-100">Record #{record.id}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {status && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
         </div>

@@ -1,22 +1,39 @@
 "use client";
-import { useState } from "react";
-import { encryptData, uploadToIPFS, cacheToSimulatedIPFS, fetchFromIPFS, decryptData } from "@/utils/crypto";
-import { UploadCloud, Shield, Share2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { encryptData, uploadToIPFS, cacheToSimulatedIPFS, fetchFromIPFS, decryptData, derivePatientKey } from "@/utils/crypto";
+import { UploadCloud, Shield, Share2, FileText } from "lucide-react";
 
 import { ethers } from "ethers";
 
 export default function PatientDashboard({ contract, marketplaceContract, account }: { contract: any; marketplaceContract: any; account: string }) {
   const [fileData, setFileData] = useState<string>("");
-  const [secretKey, setSecretKey] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [doctorAddress, setDoctorAddress] = useState<string>("");
   const [sellCID, setSellCID] = useState<string>("");
   const [sellPrice, setSellPrice] = useState<string>("");
   
   // For viewing records
-  const [recordId, setRecordId] = useState<string>("");
-  const [viewSecretKey, setViewSecretKey] = useState<string>("");
+  const [records, setRecords] = useState<{id: number, cid: string}[]>([]);
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
+
+  const loadRecords = useCallback(async () => {
+    if (!contract || !account) return;
+    try {
+      const count = await contract.getRecordCount(account);
+      const loadedRecords = [];
+      for (let i = 0; i < Number(count); i++) {
+        const cid = await contract.getRecord(account, i);
+        loadedRecords.push({ id: i, cid });
+      }
+      setRecords(loadedRecords);
+    } catch (e) {
+      console.error("Failed to load records", e);
+    }
+  }, [contract, account]);
+
+  useEffect(() => {
+    loadRecords();
+  }, [loadRecords]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,11 +45,12 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   };
 
   const handleEncryptAndUpload = async () => {
-    if (!fileData || !secretKey) return alert("Missing file or secret key");
-    setStatus("Encrypting locally with AES-256...");
+    if (!fileData) return alert("Please select a file to upload");
+    setStatus("Encrypting locally with AES-256 Master Key...");
     
-    // Encrypt
-    const encrypted = encryptData(fileData, secretKey);
+    // Encrypt deterministically
+    const masterKey = derivePatientKey(account);
+    const encrypted = encryptData(fileData, masterKey);
     
     setStatus("Uploading encrypted blob to Pinata IPFS...");
     try {
@@ -42,6 +60,7 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
       const tx = await contract.addRecord(cid);
       await tx.wait();
       setStatus(`Success! Record anchored.`);
+      await loadRecords();
       
       // Auto-fill the CID for the marketplace so the user doesn't have to copy-paste it
       setSellCID(cid);
@@ -82,19 +101,15 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     }
   };
 
-  const handleFetchRecord = async () => {
-    if (!recordId || !viewSecretKey) return alert("Missing Record ID or Secret Key");
-    setStatus("Fetching record from blockchain...");
+  const handleViewRecord = async (cid: string) => {
+    setStatus("Fetching record from IPFS...");
     try {
-      // Get CID from contract using their own account address
-      const cid = await contract.getRecord(account, parseInt(recordId));
-      setStatus(`Found CID: ${cid}. Fetching from IPFS...`);
-      
       const encryptedBlob = await fetchFromIPFS(cid);
       if (!encryptedBlob) throw new Error("Record not found in IPFS");
 
-      setStatus("Decrypting with your secret key...");
-      const decrypted = decryptData(encryptedBlob, viewSecretKey);
+      setStatus("Decrypting with your master key...");
+      const masterKey = derivePatientKey(account);
+      const decrypted = decryptData(encryptedBlob, masterKey);
       setDecryptedData(decrypted);
       setStatus("Successfully decrypted your record.");
     } catch (err: any) {
@@ -131,9 +146,8 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
               <UploadCloud size={20} /> Upload New Record
             </h3>
             <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500/10 file:text-purple-400 hover:file:bg-purple-500/20 mb-4" />
-            <input type="password" placeholder="Create an AES Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
             <button onClick={handleEncryptAndUpload} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-              Encrypt & Anchor
+              Encrypt & Anchor (Invisible Auth)
             </button>
           </div>
 
@@ -155,14 +169,26 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
         {/* View Records Section */}
         <div className="p-4 bg-white/5 rounded-xl border border-white/5">
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <Shield size={20} /> View My Encrypted Records
+            <Shield size={20} /> My Encrypted Records
           </h3>
-          <p className="text-sm text-gray-400 mb-2">Access records uploaded by you or your doctors.</p>
-          <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
-          <input type="password" placeholder="AES Secret Key" value={viewSecretKey} onChange={(e) => setViewSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
-          <button onClick={handleFetchRecord} className="w-full py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors mb-4">
-            Fetch & Decrypt
-          </button>
+          <p className="text-sm text-gray-400 mb-4">Click any record to automatically decrypt it using your master key.</p>
+          
+          {records.length === 0 ? (
+            <div className="p-4 text-center text-gray-500 bg-black/20 rounded-lg border border-white/5">No records found. Upload one to get started!</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+              {records.map((record) => (
+                <button 
+                  key={record.id}
+                  onClick={() => handleViewRecord(record.cid)}
+                  className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-2 group"
+                >
+                  <FileText className="text-emerald-400 group-hover:scale-110 transition-transform" size={24} />
+                  <span className="text-sm font-medium text-emerald-100">Record #{record.id}</span>
+                </button>
+              ))}
+            </div>
+          )}
           
           {decryptedData && (
             <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/10">
