@@ -10,6 +10,7 @@ import { Activity, ShieldCheck, Zap } from "lucide-react";
 // Mock ABI for the MedicalConsent contract
 const CONTRACT_ABI = [
   "function addRecord(string memory _cid) external",
+  "function addRecordForPatient(address _patient, string memory _cid) external",
   "function grantConsent(address _doctor) public",
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",

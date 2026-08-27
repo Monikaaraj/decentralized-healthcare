@@ -41,6 +41,21 @@ contract MedicalConsent is Ownable {
         emit RecordAdded(msg.sender, recordId, _cid);
     }
 
+    // Doctor adds a medical record for a specific patient
+    function addRecordForPatient(address _patient, string memory _cid) external {
+        require(consent[_patient][msg.sender], "Access Denied: Doctor does not have consent");
+        
+        uint256 recordId = patientRecordCount[_patient];
+        patientRecords[_patient][recordId] = Record({
+            cid: _cid,
+            timestamp: block.timestamp,
+            exists: true
+        });
+        patientRecordCount[_patient]++;
+
+        emit RecordAdded(_patient, recordId, _cid);
+    }
+
     // Grant access to a doctor
     function grantConsent(address _doctor) external {
         consent[msg.sender][_doctor] = true;

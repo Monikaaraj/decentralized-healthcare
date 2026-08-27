@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { fetchFromIPFS, decryptData } from "@/utils/crypto";
-import { FileSearch, LockOpen } from "lucide-react";
+import { fetchFromIPFS, decryptData, encryptData, uploadToIPFS } from "@/utils/crypto";
+import { FileSearch, LockOpen, UploadCloud } from "lucide-react";
 
 export default function DoctorDashboard({ contract, account }: { contract: any; account: string }) {
   const [patientAddress, setPatientAddress] = useState("");
@@ -9,6 +9,42 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   const [secretKey, setSecretKey] = useState("");
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+
+  // Upload State
+  const [uploadFileData, setUploadFileData] = useState<string>("");
+  const [uploadPatientAddress, setUploadPatientAddress] = useState("");
+  const [uploadSecretKey, setUploadSecretKey] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => setUploadFileData(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleEncryptAndUploadForPatient = async () => {
+    if (!uploadFileData || !uploadSecretKey || !uploadPatientAddress) return alert("Missing file, key, or patient address");
+    setUploadStatus("Encrypting locally with AES-256...");
+    
+    // Encrypt
+    const encrypted = encryptData(uploadFileData, uploadSecretKey);
+    
+    setUploadStatus("Uploading encrypted blob to IPFS...");
+    try {
+      const cid = await uploadToIPFS(encrypted);
+      
+      setUploadStatus("Anchoring to blockchain on behalf of patient...");
+      const tx = await contract.addRecordForPatient(uploadPatientAddress, cid);
+      await tx.wait();
+      setUploadStatus(`Success! Record anchored to ${uploadPatientAddress}.`);
+    } catch (err: any) {
+      console.error(err);
+      setUploadStatus(err.message || "Error processing record. Ensure the patient granted you access.");
+    }
+  };
 
   const handleFetchRecord = async () => {
     if (!patientAddress || !secretKey) return alert("Missing inputs");
@@ -37,16 +73,46 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
         <FileSearch className="text-blue-400" /> Doctor Portal
       </h2>
       
-      <div className="space-y-4">
-        <input type="text" placeholder="Patient Wallet Address (0x...)" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-        <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-        <input type="password" placeholder="Patient's Provided Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-        
-        <button onClick={handleFetchRecord} className="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-          <LockOpen size={20} /> Request & Decrypt Record
-        </button>
+      <div className="space-y-6">
+        {/* Upload For Patient Section */}
+        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+            <UploadCloud size={20} /> Upload Lab Report for Patient
+          </h3>
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="Patient Wallet Address (0x...)" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+            <button onClick={() => setUploadPatientAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")} className="px-4 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors text-sm">
+              Use Demo Patient
+            </button>
+          </div>
+          <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
+          <input type="password" placeholder="AES Secret Key (Share this with patient out-of-band)" value={uploadSecretKey} onChange={(e) => setUploadSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+          <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
+            Encrypt & Upload to Patient's Vault
+          </button>
+          {uploadStatus && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{uploadStatus}</div>}
+        </div>
 
-        {status && <div className="p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
+        {/* Fetch Record Section */}
+        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+            <LockOpen size={20} /> Decrypt Existing Record
+          </h3>
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="Patient Wallet Address (0x...)" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+            <button onClick={() => setPatientAddress("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266")} className="px-4 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors text-sm">
+              Use Demo Patient
+            </button>
+          </div>
+          <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
+          <input type="password" placeholder="Patient's Provided Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
+          
+          <button onClick={handleFetchRecord} className="w-full py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors flex items-center justify-center gap-2">
+            <LockOpen size={20} /> Request & Decrypt Record
+          </button>
+
+          {status && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
+        </div>
 
         {decryptedData && (
           <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/10 overflow-hidden">

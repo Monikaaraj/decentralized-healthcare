@@ -96,7 +96,12 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
             <Share2 size={20} /> Manage Consent
           </h3>
-          <input type="text" placeholder="Doctor's Wallet Address (0x...)" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="Doctor's Wallet Address (0x...)" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors" />
+            <button onClick={() => setDoctorAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")} className="px-4 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm">
+              Use Demo Doctor
+            </button>
+          </div>
           <div className="flex gap-4">
             <button onClick={() => handleToggleConsent(true)} className="flex-1 py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors">Grant Access</button>
             <button onClick={() => handleToggleConsent(false)} className="flex-1 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition-colors">Revoke Access</button>
