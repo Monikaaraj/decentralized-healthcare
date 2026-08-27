@@ -14,7 +14,9 @@ const CONTRACT_ABI = [
   "function grantConsent(address _doctor) public",
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
-  "function getPatientRecords(address _patient) public view returns (string[] memory)"
+  "function getPatientRecords(address _patient) public view returns (string[] memory)",
+  "function getRecord(address _patient, uint256 _recordId) external view returns (string memory)",
+  "function getRecordCount(address _patient) external view returns (uint256)"
 ];
 
 const MARKETPLACE_ABI = [
