@@ -46,13 +46,32 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     }
   };
 
+  // Resolve username to wallet address from the global Auth Registry
+  const resolveAddress = (idOrAddress: string) => {
+    if (idOrAddress.startsWith("0x") && idOrAddress.length === 42) return idOrAddress;
+    
+    // Look up username in local storage
+    try {
+      const users = JSON.parse(localStorage.getItem("aegis_users") || "{}");
+      const user = users[idOrAddress.toLowerCase()];
+      if (user && user.walletAddress) {
+        return user.walletAddress;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    
+    return idOrAddress; // Fallback to whatever they typed
+  };
+
   const handleToggleConsent = async (grant: boolean) => {
     if (!doctorAddress) return;
+    const resolvedAddress = resolveAddress(doctorAddress);
     setStatus(`Processing consent transaction...`);
     try {
-      const tx = grant ? await contract.grantConsent(doctorAddress) : await contract.revokeConsent(doctorAddress);
+      const tx = grant ? await contract.grantConsent(resolvedAddress) : await contract.revokeConsent(resolvedAddress);
       await tx.wait();
-      setStatus(`Consent ${grant ? "Granted" : "Revoked"} for ${doctorAddress}`);
+      setStatus(`Consent ${grant ? "Granted" : "Revoked"} for ${resolvedAddress}`);
     } catch (err: any) {
       setStatus("Consent transaction failed.");
     }
@@ -97,8 +116,8 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
             <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
               <Share2 size={20} /> Manage Consent
             </h3>
-            <p className="text-sm text-gray-400 mb-2">Enter Doctor's ID (e.g. DOC-101)</p>
-            <input type="text" placeholder="Doctor ID or Wallet Address" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
+            <p className="text-sm text-gray-400 mb-2">Enter Doctor's Username (e.g. drsmith)</p>
+            <input type="text" placeholder="Doctor's Username or Wallet Address" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
             
             <div className="flex gap-4">
               <button onClick={() => handleToggleConsent(true)} className="flex-1 py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors">Grant Access</button>

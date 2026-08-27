@@ -25,13 +25,22 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
     }
   };
 
-  // Address Registry mapping for production-like UX
+  // Resolve username to wallet address from the global Auth Registry
   const resolveAddress = (idOrAddress: string) => {
-    const registry: Record<string, string> = {
-      "PAT-001": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "PAT-002": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
-    };
-    return registry[idOrAddress.toUpperCase()] || idOrAddress;
+    if (idOrAddress.startsWith("0x") && idOrAddress.length === 42) return idOrAddress;
+    
+    // Look up username in local storage
+    try {
+      const users = JSON.parse(localStorage.getItem("aegis_users") || "{}");
+      const user = users[idOrAddress.toLowerCase()];
+      if (user && user.walletAddress) {
+        return user.walletAddress;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    
+    return idOrAddress; // Fallback to whatever they typed
   };
 
   const handleEncryptAndUploadForPatient = async () => {
@@ -90,8 +99,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
             <UploadCloud size={20} /> Upload Lab Report for Patient
           </h3>
-          <p className="text-sm text-gray-400 mb-2">Enter Patient ID (e.g. PAT-001)</p>
-          <input type="text" placeholder="Patient ID or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
+          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
+          <input type="text" placeholder="Patient's Username or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
           <input type="password" placeholder="AES Secret Key (Share this with patient out-of-band)" value={uploadSecretKey} onChange={(e) => setUploadSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
           <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
@@ -105,8 +114,8 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
             <LockOpen size={20} /> Decrypt Existing Record
           </h3>
-          <p className="text-sm text-gray-400 mb-2">Enter Patient ID (e.g. PAT-001)</p>
-          <input type="text" placeholder="Patient ID or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
+          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
+          <input type="text" placeholder="Patient's Username or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           <input type="password" placeholder="Patient's Provided Secret Key" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
           
