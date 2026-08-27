@@ -25,18 +25,17 @@ export default function PatientDashboard({ contract, account }: { contract: any;
     // Encrypt
     const encrypted = encryptData(fileData, secretKey);
     
-    setStatus("Uploading encrypted blob to IPFS...");
-    const cid = await uploadToIPFS(encrypted);
-    cacheToSimulatedIPFS(cid, encrypted);
-    
-    setStatus("Anchoring CID to Polygon Smart Contract...");
+    setStatus("Uploading encrypted blob to Pinata IPFS...");
     try {
+      const cid = await uploadToIPFS(encrypted);
+      
+      setStatus("Anchoring real IPFS CID to Polygon Smart Contract...");
       const tx = await contract.addRecord(cid);
       await tx.wait();
       setStatus(`Success! Record anchored. CID: ${cid}`);
     } catch (err: any) {
       console.error(err);
-      setStatus("Error anchoring record");
+      setStatus("Error processing record");
     }
   };
 

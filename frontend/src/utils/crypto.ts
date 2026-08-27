@@ -16,34 +16,34 @@ export const decryptData = (encryptedData: string, secretKey: string): string =>
 };
 
 /**
- * Mocks uploading an encrypted blob to IPFS and returns a dummy CID.
- * In production, this would use Pinata or Helia.
+ * Uploads an encrypted blob to Pinata IPFS via backend proxy.
  */
 export const uploadToIPFS = async (encryptedBlob: string): Promise<string> => {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  // Return a mock IPFS CID (SHA256-like format)
-  return "Qm" + CryptoJS.SHA256(encryptedBlob).toString().substring(0, 44);
+  const res = await fetch('/api/ipfs/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ encryptedData: encryptedBlob })
+  });
+  
+  if (!res.ok) {
+    throw new Error('Failed to upload to IPFS');
+  }
+  
+  const data = await res.json();
+  return data.cid;
 };
 
 /**
- * Mocks fetching data from IPFS by CID.
- * For this demo, since we don't have a real IPFS node running, 
- * we will rely on a local cache or assume the frontend handles state.
- * In a real scenario, we would `fetch("https://ipfs.io/ipfs/" + cid)`
+ * Fetches data from Pinata IPFS gateway via backend proxy.
  */
-const inMemoryCache: Record<string, string> = {};
-
-export const cacheToSimulatedIPFS = (cid: string, data: string) => {
-    inMemoryCache[cid] = data;
-    try {
-        localStorage.setItem(cid, data);
-    } catch (e) {
-        console.warn("File too large for localStorage, keeping in memory for this session.");
-    }
-};
-
 export const fetchFromIPFS = async (cid: string): Promise<string | null> => {
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  return inMemoryCache[cid] || localStorage.getItem(cid);
+  try {
+    const res = await fetch(`/api/ipfs/download?cid=${cid}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data || null;
+  } catch (err) {
+    console.error("IPFS Fetch Error:", err);
+    return null;
+  }
 };
