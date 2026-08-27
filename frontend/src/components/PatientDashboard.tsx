@@ -3,11 +3,15 @@ import { useState } from "react";
 import { encryptData, uploadToIPFS, cacheToSimulatedIPFS } from "@/utils/crypto";
 import { UploadCloud, Shield, Share2 } from "lucide-react";
 
-export default function PatientDashboard({ contract, account }: { contract: any; account: string }) {
+import { ethers } from "ethers";
+
+export default function PatientDashboard({ contract, marketplaceContract, account }: { contract: any; marketplaceContract: any; account: string }) {
   const [fileData, setFileData] = useState<string>("");
   const [secretKey, setSecretKey] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [doctorAddress, setDoctorAddress] = useState<string>("");
+  const [sellCID, setSellCID] = useState<string>("");
+  const [sellPrice, setSellPrice] = useState<string>("");
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,6 +55,20 @@ export default function PatientDashboard({ contract, account }: { contract: any;
     }
   };
 
+  const handleSellData = async () => {
+    if (!marketplaceContract || !sellCID || !sellPrice) return alert("Missing marketplace contract, CID, or price");
+    setStatus("Listing data on the Marketplace...");
+    try {
+      const priceInWei = ethers.parseUnits(sellPrice, 18);
+      const tx = await marketplaceContract.listData(sellCID, priceInWei);
+      await tx.wait();
+      setStatus(`Success! Data listed for ${sellPrice} HLTH`);
+    } catch (err: any) {
+      console.error(err);
+      setStatus("Error listing data");
+    }
+  };
+
   return (
     <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl">
       <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
@@ -80,6 +98,18 @@ export default function PatientDashboard({ contract, account }: { contract: any;
             <button onClick={() => handleToggleConsent(true)} className="flex-1 py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors">Grant Access</button>
             <button onClick={() => handleToggleConsent(false)} className="flex-1 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition-colors">Revoke Access</button>
           </div>
+        </div>
+
+        {/* Sell Data Section */}
+        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+            <span className="text-purple-400">💰</span> Sell Data to Researchers
+          </h3>
+          <input type="text" placeholder="IPFS CID (Qm...)" value={sellCID} onChange={(e) => setSellCID(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
+          <input type="number" placeholder="Price in HLTH Tokens (e.g. 50)" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
+          <button onClick={handleSellData} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
+            List on Marketplace
+          </button>
         </div>
 
         {status && <div className="p-4 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">{status}</div>}

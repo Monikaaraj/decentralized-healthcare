@@ -10,20 +10,38 @@ import { Activity, ShieldCheck, Zap } from "lucide-react";
 // Mock ABI for the MedicalConsent contract
 const CONTRACT_ABI = [
   "function addRecord(string memory _cid) external",
-  "function addRecord(string memory _cid) public",
   "function grantConsent(address _doctor) public",
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
   "function getPatientRecords(address _patient) public view returns (string[] memory)"
 ];
 
-// Provide a mock contract address (to be updated after deploying Hardhat)
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const MARKETPLACE_ABI = [
+  "function listData(string memory _ipfsCID, uint256 _price) public returns (uint256)",
+  "function purchaseData(uint256 _listingId) public",
+  "function listings(uint256) view returns (address patient, string ipfsCID, uint256 price, bool isActive)",
+  "function nextListingId() view returns (uint256)",
+  "event DataListed(uint256 indexed listingId, address indexed patient, string ipfsCID, uint256 price)"
+];
+
+const TOKEN_ABI = [
+  "function requestTokens() public",
+  "function approve(address spender, uint256 value) public returns (bool)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)"
+];
+
+// Addresses from local hardhat deployment
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; 
+const TOKEN_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const MARKETPLACE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 export default function Home() {
-  const [account, setAccount] = useState<string | null>(null);
-  const [contract, setContract] = useState<ethers.Contract | null>(null);
-  const [activePortal, setActivePortal] = useState<"patient" | "doctor" | "research">("patient");
+  const [account, setAccount] = useState<string>("");
+  const [contract, setContract] = useState<any>(null);
+  const [tokenContract, setTokenContract] = useState<any>(null);
+  const [marketplaceContract, setMarketplaceContract] = useState<any>(null);
+  const [activePortal, setActivePortal] = useState<"patient" | "doctor" | "research" | null>(null);
 
   const connectWallet = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
@@ -32,7 +50,7 @@ export default function Home() {
         try {
           await (window as any).ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x539' }], // Hex for 1337
+            params: [{ chainId: '0x539' }], 
           });
         } catch (switchError: any) {
           // If the network is not added to MetaMask, add it automatically
@@ -42,14 +60,13 @@ export default function Home() {
               params: [
                 {
                   chainId: '0x539',
-                  chainName: 'Hardhat Localhost',
-                  rpcUrls: [window.location.origin + '/api/rpc'],
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-                },
-              ],
+                  chainName: 'Localhost 8545',
+                  rpcUrls: ['http://127.0.0.1:8545'],
+                }
+              ]
             });
           } else {
-            console.error("Failed to switch network", switchError);
+            throw switchError;
           }
         }
 
@@ -58,8 +75,9 @@ export default function Home() {
         const address = await signer.getAddress();
         setAccount(address);
 
-        const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-        setContract(contractInstance);
+        setContract(new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer));
+        setTokenContract(new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer));
+        setMarketplaceContract(new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, signer));
       } catch (err) {
         console.error("Failed to connect wallet", err);
       }
@@ -77,10 +95,14 @@ export default function Home() {
           const provider = new ethers.BrowserProvider((window as any).ethereum);
           provider.getSigner().then(signer => {
              setContract(new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer));
+             setTokenContract(new ethers.Contract(TOKEN_ADDRESS, TOKEN_ABI, signer));
+             setMarketplaceContract(new ethers.Contract(MARKETPLACE_ADDRESS, MARKETPLACE_ABI, signer));
           });
         } else {
-          setAccount(null);
+          setAccount("");
           setContract(null);
+          setTokenContract(null);
+          setMarketplaceContract(null);
         }
       };
 
@@ -144,9 +166,9 @@ export default function Home() {
               </div>
             </div>
 
-            {activePortal === "patient" && <PatientDashboard contract={contract} account={account} />}
+            {activePortal === "patient" && <PatientDashboard contract={contract} marketplaceContract={marketplaceContract} account={account} />}
             {activePortal === "doctor" && <DoctorDashboard contract={contract} account={account} />}
-            {activePortal === "research" && <ResearchDashboard />}
+            {activePortal === "research" && <ResearchDashboard marketplaceContract={marketplaceContract} tokenContract={tokenContract} account={account} />}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-32 text-center">
