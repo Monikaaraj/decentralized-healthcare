@@ -9,6 +9,9 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   const [status, setStatus] = useState("");
   const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
 
+  // Tab Navigation
+  const [activeTab, setActiveTab] = useState<"upload" | "view">("upload");
+
   // Upload State
   const [uploadFileData, setUploadFileData] = useState<string>("");
   const [uploadPatientAddress, setUploadPatientAddress] = useState("");
@@ -108,86 +111,104 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
         <FileSearch className="text-blue-400" /> Doctor Portal
       </h2>
       
+      {/* Tab Navigation */}
+      <div className="flex space-x-2 mb-8 bg-black/20 p-1 rounded-xl w-full max-w-sm">
+        <button 
+          onClick={() => setActiveTab("upload")} 
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "upload" ? "bg-white/10 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
+        >
+          Upload Lab Report
+        </button>
+        <button 
+          onClick={() => setActiveTab("view")} 
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "view" ? "bg-white/10 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
+        >
+          View Patient Records
+        </button>
+      </div>
+
       <div className="space-y-6">
-        {/* Upload For Patient Section */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <UploadCloud size={20} /> Upload Lab Report for Patient
-          </h3>
-          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
-          <input type="text" placeholder="Patient's Username or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
-          <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
-          <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-            Encrypt & Upload to Patient's Vault (Invisible Auth)
-          </button>
-          {uploadStatus && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{uploadStatus}</div>}
-        </div>
-
-        {/* Fetch Record Section */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <LockOpen size={20} /> View Patient Records
-          </h3>
-          <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13) to load their records.</p>
-          <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="Patient's Username or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
-            <button onClick={loadPatientRecords} className="px-6 py-3 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
-              <Search size={20} /> Load
+        {activeTab === "upload" && (
+          <div className="p-4 bg-white/5 rounded-xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+              <UploadCloud size={20} /> Upload Lab Report for Patient
+            </h3>
+            <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13)</p>
+            <input type="text" placeholder="Patient's Username or Wallet Address" value={uploadPatientAddress} onChange={(e) => setUploadPatientAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors mb-4" />
+            <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/10 file:text-blue-400 hover:file:bg-blue-500/20 mb-4" />
+            <button onClick={handleEncryptAndUploadForPatient} className="mt-4 w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
+              Encrypt & Upload to Patient's Vault (Invisible Auth)
             </button>
+            {uploadStatus && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{uploadStatus}</div>}
           </div>
+        )}
 
-          {records.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
-              {records.map((record) => {
-                const isDoctor = record.uploader.toLowerCase() !== resolveAddress(patientAddress).toLowerCase();
-                const btnClass = isDoctor
-                  ? "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20"
-                  : "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20";
-                const iconColor = isDoctor ? "text-blue-400" : "text-emerald-400";
-                const textColor = isDoctor ? "text-blue-100" : "text-emerald-100";
-
-                return (
-                  <button 
-                    key={record.id}
-                    onClick={() => handleViewRecord(record.cid)}
-                    className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
-                  >
-                    <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
-                    <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
-                    <span className={`text-xs ${isDoctor ? 'text-blue-400/70' : 'text-emerald-400/70'}`}>
-                      By {isDoctor ? 'Doctor' : 'Patient'}
-                    </span>
-                  </button>
-                );
-              })}
+        {activeTab === "view" && (
+          <div className="p-4 bg-white/5 rounded-xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+              <LockOpen size={20} /> View Patient Records
+            </h3>
+            <p className="text-sm text-gray-400 mb-2">Enter Patient Username (e.g. rahulr13) to load their records.</p>
+            <div className="flex gap-2 mb-4">
+              <input type="text" placeholder="Patient's Username or Wallet Address" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} className="flex-1 bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+              <button onClick={loadPatientRecords} className="px-6 py-3 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
+                <Search size={20} /> Load
+              </button>
             </div>
-          )}
 
-          {status && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
-        </div>
+            {records.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-4">
+                {records.map((record) => {
+                  const isDoctor = record.uploader.toLowerCase() !== resolveAddress(patientAddress).toLowerCase();
+                  const btnClass = isDoctor
+                    ? "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20"
+                    : "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20";
+                  const iconColor = isDoctor ? "text-blue-400" : "text-emerald-400";
+                  const textColor = isDoctor ? "text-blue-100" : "text-emerald-100";
 
-        {decryptedData && (
-          <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/10 overflow-hidden">
-            <h4 className="text-sm text-gray-400 mb-4 flex items-center justify-between">
-              Decrypted File Preview
-              <a 
-                href={decryptedData} 
-                download={`decrypted_record_${recordId}`}
-                className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors text-xs"
-              >
-                Download File
-              </a>
-            </h4>
-            
-            {decryptedData.startsWith("data:image") ? (
-               <img src={decryptedData} alt="Medical Record" className="max-w-full rounded-lg" />
-            ) : decryptedData.startsWith("data:application/pdf") ? (
-               <iframe src={decryptedData} className="w-full h-96 rounded-lg bg-white" title="PDF Preview" />
-            ) : (
-               <div className="max-h-64 overflow-auto">
-                 <p className="text-xs break-all font-mono text-gray-300">{decryptedData.substring(0, 500)}...</p>
-               </div>
+                  return (
+                    <button 
+                      key={record.id}
+                      onClick={() => handleViewRecord(record.cid)}
+                      className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
+                    >
+                      <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
+                      <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
+                      <span className={`text-xs ${isDoctor ? 'text-blue-400/70' : 'text-emerald-400/70'}`}>
+                        By {isDoctor ? 'Doctor' : 'Patient'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
+
+            {decryptedData && (
+              <div className="mt-4 p-4 bg-black/40 rounded-xl border border-white/10 overflow-hidden">
+                <h4 className="text-sm text-gray-400 mb-4 flex items-center justify-between">
+                  Decrypted File Preview
+                  <a 
+                    href={decryptedData} 
+                    download={`patient_record`}
+                    className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 transition-colors text-xs"
+                  >
+                    Download File
+                  </a>
+                </h4>
+                
+                {decryptedData.startsWith("data:image") ? (
+                   <img src={decryptedData} alt="Medical Record" className="max-w-full rounded-lg" />
+                ) : decryptedData.startsWith("data:application/pdf") ? (
+                   <iframe src={decryptedData} className="w-full h-96 rounded-lg bg-white" title="PDF Preview" />
+                ) : (
+                   <div className="max-h-64 overflow-auto">
+                     <p className="text-xs break-all font-mono text-gray-300">{decryptedData}</p>
+                   </div>
+                )}
+              </div>
+            )}
+            
+            {status && <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
           </div>
         )}
       </div>

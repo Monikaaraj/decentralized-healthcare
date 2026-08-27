@@ -12,6 +12,9 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   const [sellCID, setSellCID] = useState<string>("");
   const [sellPrice, setSellPrice] = useState<string>("");
   
+  // Tab Navigation
+  const [activeTab, setActiveTab] = useState<"upload" | "view" | "marketplace">("upload");
+  
   // For viewing records
   const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
@@ -138,94 +141,129 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
         <Shield className="text-emerald-400" /> Patient Digital Passport
       </h2>
 
+      {/* Tab Navigation */}
+      <div className="flex space-x-2 mb-8 bg-black/20 p-1 rounded-xl w-full max-w-md">
+        <button 
+          onClick={() => setActiveTab("upload")} 
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "upload" ? "bg-white/10 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
+        >
+          Upload Document
+        </button>
+        <button 
+          onClick={() => setActiveTab("view")} 
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "view" ? "bg-white/10 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
+        >
+          View Documents
+        </button>
+        <button 
+          onClick={() => setActiveTab("marketplace")} 
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "marketplace" ? "bg-white/10 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
+        >
+          Marketplace
+        </button>
+      </div>
+
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Upload Section */}
-          <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+        {activeTab === "upload" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Upload Section */}
+            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+              <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                <UploadCloud size={20} /> Upload New Record
+              </h3>
+              <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500/10 file:text-purple-400 hover:file:bg-purple-500/20 mb-4" />
+              <button onClick={handleEncryptAndUpload} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
+                Encrypt & Anchor (Invisible Auth)
+              </button>
+            </div>
+
+            {/* Consent Section (Moved inside Upload tab) */}
+            <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+              <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                <Share2 size={20} /> Manage Consent
+              </h3>
+              <p className="text-sm text-gray-400 mb-2">Enter Doctor's Username to grant them upload/view access.</p>
+              <input type="text" placeholder="Doctor's Username or Wallet Address" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
+              
+              <div className="flex gap-4">
+                <button onClick={() => handleToggleConsent(true)} className="flex-1 py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors">Grant Access</button>
+                <button onClick={() => handleToggleConsent(false)} className="flex-1 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition-colors">Revoke Access</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "view" && (
+          <div className="p-4 bg-white/5 rounded-xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-              <UploadCloud size={20} /> Upload New Record
+              <Shield size={20} /> My Encrypted Records
             </h3>
-            <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500/10 file:text-purple-400 hover:file:bg-purple-500/20 mb-4" />
-            <button onClick={handleEncryptAndUpload} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-              Encrypt & Anchor (Invisible Auth)
+            <p className="text-sm text-gray-400 mb-4">Click any record to automatically decrypt it using your master key.</p>
+            
+            {records.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 bg-black/20 rounded-lg border border-white/5">No records found. Upload one to get started!</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
+                {records.map((record) => {
+                  const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
+                  const btnClass = isSelf 
+                    ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20" 
+                    : "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20";
+                  const iconColor = isSelf ? "text-emerald-400" : "text-blue-400";
+                  const textColor = isSelf ? "text-emerald-100" : "text-blue-100";
+                  
+                  return (
+                    <button 
+                      key={record.id}
+                      onClick={() => handleViewRecord(record.cid)}
+                      className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
+                    >
+                      <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
+                      <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
+                      <span className={`text-xs ${isSelf ? 'text-emerald-400/70' : 'text-blue-400/70'}`}>
+                        By {isSelf ? 'You' : 'Doctor'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            
+            {decryptedData && (
+              <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/10">
+                <h4 className="text-sm font-medium text-emerald-400 mb-4 flex justify-between items-center">
+                  Decrypted File Preview
+                  <a href={decryptedData} download="medical_record" className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs">
+                    Download File
+                  </a>
+                </h4>
+                {decryptedData.startsWith("data:image") ? (
+                  <img src={decryptedData} alt="Decrypted Medical Record" className="max-w-full h-auto rounded-lg border border-white/5" />
+                ) : decryptedData.startsWith("data:application/pdf") ? (
+                  <iframe src={decryptedData} className="w-full h-96 bg-white rounded-lg" />
+                ) : (
+                  <div className="max-h-64 overflow-auto bg-black/50 p-4 rounded text-xs font-mono text-gray-300 break-all">
+                    {decryptedData}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "marketplace" && (
+          <div className="p-4 bg-white/5 rounded-xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+              <span className="text-purple-400">💰</span> Sell Data to Researchers
+            </h3>
+            <p className="text-sm text-gray-400 mb-2">The IPFS CID will auto-fill after you upload a record.</p>
+            <input type="text" placeholder="IPFS CID (Auto-fills after upload)" value={sellCID} readOnly className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-gray-400 focus:outline-none cursor-not-allowed mb-4" />
+            <input type="number" placeholder="Set Price in HLTH Tokens (e.g. 50)" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
+            <button onClick={handleSellData} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
+              List on Marketplace
             </button>
           </div>
-
-          {/* Consent Section */}
-          <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-            <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-              <Share2 size={20} /> Manage Consent
-            </h3>
-            <p className="text-sm text-gray-400 mb-2">Enter Doctor's Username (e.g. drsmith)</p>
-            <input type="text" placeholder="Doctor's Username or Wallet Address" value={doctorAddress} onChange={(e) => setDoctorAddress(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
-            
-            <div className="flex gap-4">
-              <button onClick={() => handleToggleConsent(true)} className="flex-1 py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors">Grant Access</button>
-              <button onClick={() => handleToggleConsent(false)} className="flex-1 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition-colors">Revoke Access</button>
-            </div>
-          </div>
-        </div>
-
-        {/* View Records Section */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <Shield size={20} /> My Encrypted Records
-          </h3>
-          <p className="text-sm text-gray-400 mb-4">Click any record to automatically decrypt it using your master key.</p>
-          
-          {records.length === 0 ? (
-            <div className="p-4 text-center text-gray-500 bg-black/20 rounded-lg border border-white/5">No records found. Upload one to get started!</div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-              {records.map((record) => {
-                const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
-                const btnClass = isSelf 
-                  ? "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20" 
-                  : "bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/20";
-                const iconColor = isSelf ? "text-emerald-400" : "text-blue-400";
-                const textColor = isSelf ? "text-emerald-100" : "text-blue-100";
-                
-                return (
-                  <button 
-                    key={record.id}
-                    onClick={() => handleViewRecord(record.cid)}
-                    className={`p-4 border rounded-xl transition-all flex flex-col items-center justify-center gap-2 group ${btnClass}`}
-                  >
-                    <FileText className={`${iconColor} group-hover:scale-110 transition-transform`} size={24} />
-                    <span className={`text-sm font-medium ${textColor}`}>Record #{record.id}</span>
-                    <span className={`text-xs ${isSelf ? 'text-emerald-400/70' : 'text-blue-400/70'}`}>
-                      By {isSelf ? 'You' : 'Doctor'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          
-          {decryptedData && (
-            <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/10">
-              <h4 className="text-sm font-medium text-emerald-400 mb-2">Decrypted File Preview:</h4>
-              {decryptedData.startsWith("data:image") ? (
-                <img src={decryptedData} alt="Decrypted Medical Record" className="max-w-full h-auto rounded-lg border border-white/5" />
-              ) : (
-                <iframe src={decryptedData} className="w-full h-64 bg-white rounded-lg" />
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Sell Data Section */}
-        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <span className="text-purple-400">💰</span> Sell Data to Researchers
-          </h3>
-          <p className="text-sm text-gray-400 mb-2">The IPFS CID will auto-fill after you upload a record.</p>
-          <input type="text" placeholder="IPFS CID (Auto-fills after upload)" value={sellCID} readOnly className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-gray-400 focus:outline-none cursor-not-allowed mb-4" />
-          <input type="number" placeholder="Set Price in HLTH Tokens (e.g. 50)" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
-          <button onClick={handleSellData} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-            List on Marketplace
-          </button>
-        </div>
+        )}
 
         {status && <div className="p-4 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">{status}</div>}
       </div>
