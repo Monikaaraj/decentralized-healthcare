@@ -256,9 +256,26 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
             <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
               <span className="text-purple-400">💰</span> Sell Data to Researchers
             </h3>
-            <p className="text-sm text-gray-400 mb-2">The IPFS CID will auto-fill after you upload a record.</p>
-            <input type="text" placeholder="IPFS CID (Auto-fills after upload)" value={sellCID} readOnly className="w-full bg-black/40 border border-white/5 rounded-lg p-3 text-gray-400 focus:outline-none cursor-not-allowed mb-4" />
+            <p className="text-sm text-gray-400 mb-2">Select an existing record from your vault to list on the marketplace.</p>
+            
+            <select 
+              value={sellCID} 
+              onChange={(e) => setSellCID(e.target.value)}
+              className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4"
+            >
+              <option value="" disabled>-- Select a Record to Sell --</option>
+              {records.map(record => {
+                const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
+                return (
+                  <option key={record.id} value={record.cid}>
+                    Record #{record.id} (Uploaded by {isSelf ? 'You' : 'Doctor'})
+                  </option>
+                );
+              })}
+            </select>
+
             <input type="number" placeholder="Set Price in HLTH Tokens (e.g. 50)" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
+            
             <button onClick={handleSellData} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
               List on Marketplace
             </button>
