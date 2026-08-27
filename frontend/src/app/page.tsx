@@ -20,11 +20,13 @@ const CONTRACT_ABI = [
 ];
 
 const MARKETPLACE_ABI = [
-  "function listData(string memory _ipfsCID, uint256 _price) public returns (uint256)",
-  "function purchaseData(uint256 _listingId) public",
-  "function listings(uint256) view returns (address patient, string ipfsCID, uint256 price, bool isActive)",
-  "function nextListingId() view returns (uint256)",
-  "event DataListed(uint256 indexed listingId, address indexed patient, string ipfsCID, uint256 price)"
+  "function createBounty(string memory _description, uint256 _reward, uint256 _totalEscrow) public returns (uint256)",
+  "function fulfillBounty(uint256 _bountyId, string memory _ipfsCID) public",
+  "function cancelBounty(uint256 _bountyId) public",
+  "function nextBountyId() public view returns (uint256)",
+  "function bounties(uint256) public view returns (address creator, string description, uint256 rewardPerFulfillment, uint256 remainingEscrow, bool isActive)",
+  "event BountyCreated(uint256 indexed bountyId, address indexed creator, string description, uint256 reward, uint256 totalEscrow)",
+  "event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward)"
 ];
 
 const TOKEN_ABI = [

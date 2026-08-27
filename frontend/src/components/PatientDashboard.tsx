@@ -18,6 +18,9 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   // For viewing records
   const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
+  
+  // Marketplace Bounties
+  const [bounties, setBounties] = useState<any[]>([]);
 
   const loadRecords = useCallback(async () => {
     if (!contract || !account) return;
@@ -34,9 +37,32 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     }
   }, [contract, account]);
 
+  const fetchBounties = useCallback(async () => {
+    if (!marketplaceContract) return;
+    try {
+      const totalBounties = await marketplaceContract.nextBountyId();
+      const loaded = [];
+      for (let i = 0; i < Number(totalBounties); i++) {
+        const bounty = await marketplaceContract.bounties(i);
+        if (bounty.isActive) {
+          loaded.push({
+            id: i,
+            description: bounty.description,
+            reward: ethers.formatUnits(bounty.rewardPerFulfillment, 18),
+            creator: bounty.creator
+          });
+        }
+      }
+      setBounties(loaded);
+    } catch (e) {
+      console.error("Failed to load bounties", e);
+    }
+  }, [marketplaceContract]);
+
   useEffect(() => {
     loadRecords();
-  }, [loadRecords]);
+    fetchBounties();
+  }, [loadRecords, fetchBounties]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -121,17 +147,17 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     }
   };
 
-  const handleSellData = async () => {
-    if (!marketplaceContract || !sellCID || !sellPrice) return alert("Missing marketplace contract, CID, or price");
-    setStatus("Listing data on the Marketplace...");
+  const handleFulfillBounty = async (bountyId: number) => {
+    if (!marketplaceContract || !sellCID) return alert("Please select a record to fulfill the bounty with.");
+    setStatus("Fulfilling bounty...");
     try {
-      const priceInWei = ethers.parseUnits(sellPrice, 18);
-      const tx = await marketplaceContract.listData(sellCID, priceInWei);
+      const tx = await marketplaceContract.fulfillBounty(bountyId, sellCID);
       await tx.wait();
-      setStatus(`Success! Data listed for ${sellPrice} HLTH`);
+      setStatus("Success! Bounty fulfilled and HLTH tokens earned.");
+      fetchBounties(); // refresh
     } catch (err: any) {
       console.error(err);
-      setStatus("Error listing data");
+      setStatus("Failed to fulfill bounty.");
     }
   };
 
@@ -254,31 +280,55 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
         {activeTab === "marketplace" && (
           <div className="p-4 bg-white/5 rounded-xl border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-              <span className="text-purple-400">💰</span> Sell Data to Researchers
+              <span className="text-purple-400">💰</span> Earn Tokens via Research Bounties
             </h3>
-            <p className="text-sm text-gray-400 mb-2">Select an existing record from your vault to list on the marketplace.</p>
+            <p className="text-sm text-gray-400 mb-6">Researchers post bounties for specific health data. Provide your data to earn the reward instantly.</p>
             
-            <select 
-              value={sellCID} 
-              onChange={(e) => setSellCID(e.target.value)}
-              className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4"
-            >
-              <option value="" disabled>-- Select a Record to Sell --</option>
-              {records.map(record => {
-                const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
-                return (
-                  <option key={record.id} value={record.cid}>
-                    Record #{record.id} (Uploaded by {isSelf ? 'You' : 'Doctor'})
-                  </option>
-                );
-              })}
-            </select>
-
-            <input type="number" placeholder="Set Price in HLTH Tokens (e.g. 50)" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors mb-4" />
-            
-            <button onClick={handleSellData} className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 transition-opacity flex justify-center text-white">
-              List on Marketplace
-            </button>
+            {bounties.length === 0 ? (
+              <p className="text-gray-500 italic text-center py-8">No research bounties currently available.</p>
+            ) : (
+              <div className="space-y-4">
+                {bounties.map((bounty) => (
+                  <div key={bounty.id} className="p-6 bg-black/20 border border-white/10 rounded-xl hover:border-purple-500/50 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="text-lg font-medium text-white mb-1">"{bounty.description}"</h4>
+                        <p className="text-xs text-gray-500">Posted by Researcher: {bounty.creator.substring(0,6)}...{bounty.creator.substring(38)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="block font-bold text-emerald-400 text-xl">{bounty.reward} HLTH</span>
+                        <span className="block text-xs text-gray-500">Reward</span>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-white/10 flex gap-4 items-center">
+                      <select 
+                        value={sellCID} 
+                        onChange={(e) => setSellCID(e.target.value)}
+                        className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                      >
+                        <option value="" disabled>-- Select a Record to Submit --</option>
+                        {records.map(record => {
+                          const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
+                          return (
+                            <option key={record.id} value={record.cid}>
+                              Record #{record.id} (Uploaded by {isSelf ? 'You' : 'Doctor'})
+                            </option>
+                          );
+                        })}
+                      </select>
+                      
+                      <button 
+                        onClick={() => handleFulfillBounty(bounty.id)} 
+                        className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-lg font-medium hover:opacity-90 text-white shadow-lg whitespace-nowrap"
+                      >
+                        Fulfill Bounty
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

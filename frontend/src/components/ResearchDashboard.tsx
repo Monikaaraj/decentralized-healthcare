@@ -7,8 +7,12 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
   
   // Marketplace State
   const [hlthBalance, setHlthBalance] = useState<string>("0");
-  const [listings, setListings] = useState<any[]>([]);
+  const [bounties, setBounties] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState<string>("");
+  
+  const [newBountyDesc, setNewBountyDesc] = useState("");
+  const [newBountyReward, setNewBountyReward] = useState("");
+  const [newBountyMax, setNewBountyMax] = useState("1");
 
   const fetchStatus = async () => {
     try {
@@ -28,21 +32,22 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
       const balance = await tokenContract.balanceOf(account);
       setHlthBalance(ethers.formatUnits(balance, 18));
 
-      // Fetch all listings
-      const totalListings = await marketplaceContract.nextListingId();
-      const loadedListings = [];
-      for (let i = 0; i < Number(totalListings); i++) {
-        const listing = await marketplaceContract.listings(i);
-        if (listing.isActive) {
-          loadedListings.push({
+      // Fetch all bounties
+      const totalBounties = await marketplaceContract.nextBountyId();
+      const loadedBounties = [];
+      for (let i = 0; i < Number(totalBounties); i++) {
+        const bounty = await marketplaceContract.bounties(i);
+        if (bounty.isActive) {
+          loadedBounties.push({
             id: i,
-            patient: listing.patient,
-            ipfsCID: listing.ipfsCID,
-            price: ethers.formatUnits(listing.price, 18)
+            creator: bounty.creator,
+            description: bounty.description,
+            reward: ethers.formatUnits(bounty.rewardPerFulfillment, 18),
+            remainingEscrow: ethers.formatUnits(bounty.remainingEscrow, 18)
           });
         }
       }
-      setListings(loadedListings);
+      setBounties(loadedBounties);
     } catch (err) {
       console.error("Error fetching marketplace data:", err);
     }
@@ -82,28 +87,30 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
     }
   };
 
-  const handlePurchase = async (id: number, priceStr: string) => {
-    if (!tokenContract || !marketplaceContract) return;
-    setMarketStatus("Approving HLTH token spend...");
+  const handleCreateBounty = async () => {
+    if (!tokenContract || !marketplaceContract || !newBountyDesc || !newBountyReward || !newBountyMax) return;
+    setMarketStatus("Approving HLTH token escrow...");
     try {
-      const priceWei = ethers.parseUnits(priceStr, 18);
+      const rewardWei = ethers.parseUnits(newBountyReward, 18);
+      const maxFulfillments = BigInt(newBountyMax);
+      const totalEscrowWei = rewardWei * maxFulfillments;
       
-      // Step 1: Approve Marketplace to spend HLTH
       const marketplaceAddress = await marketplaceContract.getAddress();
-      const approveTx = await tokenContract.approve(marketplaceAddress, priceWei);
+      const approveTx = await tokenContract.approve(marketplaceAddress, totalEscrowWei);
       await approveTx.wait();
 
-      setMarketStatus("Purchasing data...");
-      
-      // Step 2: Purchase Data
-      const purchaseTx = await marketplaceContract.purchaseData(id);
-      await purchaseTx.wait();
+      setMarketStatus("Creating Data Request Bounty...");
+      const tx = await marketplaceContract.createBounty(newBountyDesc, rewardWei, totalEscrowWei);
+      await tx.wait();
 
-      setMarketStatus("Success! Data purchased successfully.");
+      setMarketStatus("Success! Bounty created and funded.");
+      setNewBountyDesc("");
+      setNewBountyReward("");
+      setNewBountyMax("1");
       fetchMarketplaceData();
     } catch (err: any) {
       console.error(err);
-      setMarketStatus("Purchase failed.");
+      setMarketStatus("Failed to create bounty.");
     }
   };
 
@@ -128,23 +135,39 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
 
         {marketStatus && <div className="p-4 mb-6 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">{marketStatus}</div>}
 
-        <h3 className="text-lg font-semibold text-white mb-4">Available Medical Datasets</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Post a Data Request (Bounty)</h3>
+        <div className="bg-black/20 p-4 rounded-xl border border-white/10 mb-8 space-y-4">
+          <input type="text" placeholder="Description (e.g. 'Seeking MRI scans of knee')" value={newBountyDesc} onChange={(e) => setNewBountyDesc(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500" />
+          <div className="flex gap-4">
+            <input type="number" placeholder="Reward per File (HLTH)" value={newBountyReward} onChange={(e) => setNewBountyReward(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500" />
+            <input type="number" placeholder="Max Fulfillments" value={newBountyMax} onChange={(e) => setNewBountyMax(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <button onClick={handleCreateBounty} className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg font-medium hover:opacity-90 text-white shadow-lg">
+            Fund & Post Bounty
+          </button>
+        </div>
+
+        <h3 className="text-lg font-semibold text-white mb-4">Active Bounties</h3>
         
-        {listings.length === 0 ? (
-          <p className="text-gray-500 italic text-center py-8">No data currently listed on the marketplace.</p>
+        {bounties.length === 0 ? (
+          <p className="text-gray-500 italic text-center py-8">No bounties are currently active.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {listings.map((item) => (
+            {bounties.map((item) => (
               <div key={item.id} className="p-4 bg-white/5 border border-white/10 rounded-xl hover:border-indigo-500/50 transition-colors">
-                <p className="text-xs text-gray-500 mb-2">Provider: {item.patient.substring(0,6)}...{item.patient.substring(38)}</p>
-                <p className="text-sm font-mono text-emerald-400 mb-4 bg-emerald-400/10 p-2 rounded truncate" title={item.ipfsCID}>
-                  CID: {item.ipfsCID}
+                <p className="text-xs text-gray-500 mb-2">Creator: {item.creator.substring(0,6)}...{item.creator.substring(38)}</p>
+                <p className="text-sm font-medium text-white mb-4">
+                  "{item.description}"
                 </p>
-                <div className="flex justify-between items-center mt-4">
-                  <span className="font-bold text-white">{item.price} HLTH</span>
-                  <button onClick={() => handlePurchase(item.id, item.price)} className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 rounded-lg text-sm font-medium text-white shadow-lg">
-                    Buy Access
-                  </button>
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/10">
+                  <div>
+                    <span className="block font-bold text-emerald-400">{item.reward} HLTH</span>
+                    <span className="block text-xs text-gray-500">Reward per Record</span>
+                  </div>
+                  <div className="text-right">
+                     <span className="block text-sm text-indigo-400">{item.remainingEscrow} HLTH</span>
+                     <span className="block text-xs text-gray-500">Escrow Remaining</span>
+                  </div>
                 </div>
               </div>
             ))}

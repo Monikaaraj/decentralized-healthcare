@@ -7,64 +7,77 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract DataMarketplace is Ownable {
     IERC20 public healthToken;
 
-    struct DataListing {
-        address patient;
-        string ipfsCID;
-        uint256 price;
+    struct Bounty {
+        address creator;
+        string description;
+        uint256 rewardPerFulfillment;
+        uint256 remainingEscrow;
         bool isActive;
     }
 
-    // Mapping from listing ID to DataListing
-    mapping(uint256 => DataListing) public listings;
-    uint256 public nextListingId;
+    // Mapping from bounty ID to Bounty
+    mapping(uint256 => Bounty) public bounties;
+    uint256 public nextBountyId;
 
-    // Event when a patient lists data for sale
-    event DataListed(uint256 indexed listingId, address indexed patient, string ipfsCID, uint256 price);
-    // Event when a researcher buys data
-    event DataPurchased(uint256 indexed listingId, address indexed researcher, address indexed patient, uint256 price);
+    // Events
+    event BountyCreated(uint256 indexed bountyId, address indexed creator, string description, uint256 reward, uint256 totalEscrow);
+    event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward);
 
     constructor(address _healthTokenAddress) Ownable(msg.sender) {
         healthToken = IERC20(_healthTokenAddress);
     }
 
-    // Patient lists their data CID for sale at a specific HLTH token price
-    function listData(string memory _ipfsCID, uint256 _price) public returns (uint256) {
-        require(_price > 0, "Price must be greater than zero");
+    // Researcher creates a bounty and deposits tokens into escrow
+    function createBounty(string memory _description, uint256 _reward, uint256 _totalEscrow) public returns (uint256) {
+        require(_reward > 0, "Reward must be > 0");
+        require(_totalEscrow >= _reward, "Escrow must cover at least one reward");
+        
+        // Transfer escrow from researcher to this contract
+        require(healthToken.transferFrom(msg.sender, address(this), _totalEscrow), "Token escrow failed");
 
-        uint256 listingId = nextListingId++;
-        listings[listingId] = DataListing({
-            patient: msg.sender,
-            ipfsCID: _ipfsCID,
-            price: _price,
+        uint256 bountyId = nextBountyId++;
+        bounties[bountyId] = Bounty({
+            creator: msg.sender,
+            description: _description,
+            rewardPerFulfillment: _reward,
+            remainingEscrow: _totalEscrow,
             isActive: true
         });
 
-        emit DataListed(listingId, msg.sender, _ipfsCID, _price);
-        return listingId;
+        emit BountyCreated(bountyId, msg.sender, _description, _reward, _totalEscrow);
+        return bountyId;
     }
 
-    // Researcher buys access to the data by paying the HLTH token price
-    function purchaseData(uint256 _listingId) public {
-        DataListing storage listing = listings[_listingId];
-        require(listing.isActive, "Listing is not active");
-        require(listing.patient != msg.sender, "Cannot buy your own data");
+    // Patient fulfills a bounty by providing their CID and gets paid instantly
+    function fulfillBounty(uint256 _bountyId, string memory _ipfsCID) public {
+        Bounty storage bounty = bounties[_bountyId];
+        require(bounty.isActive, "Bounty is not active");
+        require(bounty.remainingEscrow >= bounty.rewardPerFulfillment, "Insufficient escrow remaining");
 
-        uint256 price = listing.price;
-        require(healthToken.balanceOf(msg.sender) >= price, "Insufficient HLTH balance");
+        // Transfer reward from contract to patient
+        require(healthToken.transfer(msg.sender, bounty.rewardPerFulfillment), "Reward transfer failed");
 
-        // Transfer HLTH tokens from the researcher to the patient
-        // Note: The researcher must have called `approve()` on the HealthToken contract first!
-        require(healthToken.transferFrom(msg.sender, listing.patient, price), "Token transfer failed");
+        bounty.remainingEscrow -= bounty.rewardPerFulfillment;
+        
+        // If not enough for another fulfillment, deactivate it
+        if (bounty.remainingEscrow < bounty.rewardPerFulfillment) {
+            bounty.isActive = false;
+        }
 
-        emit DataPurchased(_listingId, msg.sender, listing.patient, price);
+        emit BountyFulfilled(_bountyId, msg.sender, _ipfsCID, bounty.rewardPerFulfillment);
     }
 
-    // Patient can delist their data
-    function delistData(uint256 _listingId) public {
-        DataListing storage listing = listings[_listingId];
-        require(listing.patient == msg.sender, "Only the owner can delist");
-        require(listing.isActive, "Already delisted");
+    // Researcher can cancel their bounty to withdraw remaining escrow
+    function cancelBounty(uint256 _bountyId) public {
+        Bounty storage bounty = bounties[_bountyId];
+        require(bounty.creator == msg.sender, "Only creator can cancel");
+        require(bounty.isActive, "Bounty already inactive");
 
-        listing.isActive = false;
+        bounty.isActive = false;
+        
+        // Refund remaining escrow
+        if (bounty.remainingEscrow > 0) {
+            require(healthToken.transfer(msg.sender, bounty.remainingEscrow), "Refund failed");
+        }
     }
 }
