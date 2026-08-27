@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { encryptData, uploadToIPFS, cacheToSimulatedIPFS } from "@/utils/crypto";
+import { encryptData, uploadToIPFS, cacheToSimulatedIPFS, fetchFromIPFS, decryptData } from "@/utils/crypto";
 import { UploadCloud, Shield, Share2 } from "lucide-react";
 
 import { ethers } from "ethers";
@@ -12,6 +12,11 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   const [doctorAddress, setDoctorAddress] = useState<string>("");
   const [sellCID, setSellCID] = useState<string>("");
   const [sellPrice, setSellPrice] = useState<string>("");
+  
+  // For viewing records
+  const [recordId, setRecordId] = useState<string>("");
+  const [viewSecretKey, setViewSecretKey] = useState<string>("");
+  const [decryptedData, setDecryptedData] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,6 +82,27 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     }
   };
 
+  const handleFetchRecord = async () => {
+    if (!recordId || !viewSecretKey) return alert("Missing Record ID or Secret Key");
+    setStatus("Fetching record from blockchain...");
+    try {
+      // Get CID from contract using their own account address
+      const cid = await contract.getRecord(account, parseInt(recordId));
+      setStatus(`Found CID: ${cid}. Fetching from IPFS...`);
+      
+      const encryptedBlob = await fetchFromIPFS(cid);
+      if (!encryptedBlob) throw new Error("Record not found in IPFS");
+
+      setStatus("Decrypting with your secret key...");
+      const decrypted = decryptData(encryptedBlob, viewSecretKey);
+      setDecryptedData(decrypted);
+      setStatus("Successfully decrypted your record.");
+    } catch (err: any) {
+      console.error(err);
+      setStatus(err.message || "Failed to fetch or decrypt record.");
+    }
+  };
+
   const handleSellData = async () => {
     if (!marketplaceContract || !sellCID || !sellPrice) return alert("Missing marketplace contract, CID, or price");
     setStatus("Listing data on the Marketplace...");
@@ -124,6 +150,30 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
               <button onClick={() => handleToggleConsent(false)} className="flex-1 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-lg hover:bg-red-500/30 transition-colors">Revoke Access</button>
             </div>
           </div>
+        </div>
+
+        {/* View Records Section */}
+        <div className="p-4 bg-white/5 rounded-xl border border-white/5">
+          <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+            <Shield size={20} /> View My Encrypted Records
+          </h3>
+          <p className="text-sm text-gray-400 mb-2">Access records uploaded by you or your doctors.</p>
+          <input type="number" placeholder="Record ID (e.g., 0)" value={recordId} onChange={(e) => setRecordId(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
+          <input type="password" placeholder="AES Secret Key" value={viewSecretKey} onChange={(e) => setViewSecretKey(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors mb-4" />
+          <button onClick={handleFetchRecord} className="w-full py-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded-lg hover:bg-emerald-500/30 transition-colors mb-4">
+            Fetch & Decrypt
+          </button>
+          
+          {decryptedData && (
+            <div className="mt-4 p-4 bg-black/40 rounded-lg border border-white/10">
+              <h4 className="text-sm font-medium text-emerald-400 mb-2">Decrypted File Preview:</h4>
+              {decryptedData.startsWith("data:image") ? (
+                <img src={decryptedData} alt="Decrypted Medical Record" className="max-w-full h-auto rounded-lg border border-white/5" />
+              ) : (
+                <iframe src={decryptedData} className="w-full h-64 bg-white rounded-lg" />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sell Data Section */}
