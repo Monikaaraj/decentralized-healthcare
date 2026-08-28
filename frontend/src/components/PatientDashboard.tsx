@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { encryptData, uploadToIPFS, cacheToSimulatedIPFS, fetchFromIPFS, decryptData, derivePatientKey } from "@/utils/crypto";
+import { encryptData, uploadToIPFS, fetchFromIPFS, decryptData, derivePatientKey } from "@/utils/crypto";
 import { UploadCloud, Shield, Share2, FileText } from "lucide-react";
 
 import { ethers } from "ethers";
