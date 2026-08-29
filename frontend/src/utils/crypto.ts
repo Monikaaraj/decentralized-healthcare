@@ -30,10 +30,16 @@ export const decryptData = (encryptedData: string, secretKey: string): string =>
  * Uploads an encrypted blob to Pinata IPFS via backend proxy.
  */
 export const uploadToIPFS = async (encryptedBlob: string): Promise<string> => {
-  const res = await fetch('/api/ipfs/upload', {
+  const jwt = process.env.NEXT_PUBLIC_PINATA_JWT;
+  if (!jwt) throw new Error("Pinata JWT not found");
+  
+  const res = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ encryptedData: encryptedBlob })
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${jwt}`
+    },
+    body: JSON.stringify({ pinataContent: { data: encryptedBlob } })
   });
   
   if (!res.ok) {
@@ -41,7 +47,7 @@ export const uploadToIPFS = async (encryptedBlob: string): Promise<string> => {
   }
   
   const data = await res.json();
-  return data.cid;
+  return data.IpfsHash;
 };
 
 /**
@@ -49,7 +55,7 @@ export const uploadToIPFS = async (encryptedBlob: string): Promise<string> => {
  */
 export const fetchFromIPFS = async (cid: string): Promise<string | null> => {
   try {
-    const res = await fetch(`/api/ipfs/download?cid=${cid}`);
+    const res = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`);
     if (!res.ok) return null;
     const json = await res.json();
     return json.data || null;

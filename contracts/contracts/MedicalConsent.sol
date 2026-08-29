@@ -26,6 +26,7 @@ contract MedicalConsent is Ownable {
     event RecordAdded(address indexed patient, uint256 indexed recordId, string cid);
     event ConsentGranted(address indexed patient, address indexed doctor);
     event ConsentRevoked(address indexed patient, address indexed doctor);
+    event RecordDeleted(address indexed patient, uint256 indexed recordId);
 
     constructor() Ownable(msg.sender) {}
 
@@ -90,5 +91,16 @@ contract MedicalConsent is Ownable {
             "Access Denied: No consent from patient"
         );
         return patientRecordCount[_patient];
+    }
+
+    // Delete a medical record
+    function deleteRecord(uint256 _recordId) external {
+        require(patientRecords[msg.sender][_recordId].exists, "Record does not exist");
+        require(patientRecords[msg.sender][_recordId].uploader == msg.sender, "Can only delete your own records");
+        
+        patientRecords[msg.sender][_recordId].exists = false;
+        patientRecords[msg.sender][_recordId].cid = "";
+        
+        emit RecordDeleted(msg.sender, _recordId);
     }
 }

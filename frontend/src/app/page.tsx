@@ -5,7 +5,8 @@ import { ethers } from "ethers";
 import PatientDashboard from "@/components/PatientDashboard";
 import DoctorDashboard from "@/components/DoctorDashboard";
 import ResearchDashboard from "@/components/ResearchDashboard";
-import { Activity, ShieldCheck, Zap } from "lucide-react";
+import { Activity, ShieldCheck, Zap, Globe, ChevronDown } from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
 
 // Mock ABI for the MedicalConsent contract
 const CONTRACT_ABI = [
@@ -16,7 +17,8 @@ const CONTRACT_ABI = [
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
   "function getPatientRecords(address _patient) public view returns (string[] memory)",
   "function getRecord(address _patient, uint256 _recordId) external view returns (string memory cid, address uploader, uint256 timestamp)",
-  "function getRecordCount(address _patient) external view returns (uint256)"
+  "function getRecordCount(address _patient) external view returns (uint256)",
+  "function deleteRecord(uint256 _recordId) external"
 ];
 
 const MARKETPLACE_ABI = [
@@ -36,21 +38,35 @@ const TOKEN_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// Addresses from public Sepolia deployment
-const CONTRACT_ADDRESS = "0x8aeECD13EAFed869e18655ba471D23a2906E5C62"; 
-const TOKEN_ADDRESS = "0xcF57f721fc8a6C91ADdF1A014E1494eC700947Dc";
-const MARKETPLACE_ADDRESS = "0xf0E5200c8A288Cd7EE5B0296bAeF5757fC983321";
+// Addresses from Local Hardhat Node
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; 
+const TOKEN_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const MARKETPLACE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 export default function Home() {
   const [account, setAccount] = useState<string>("");
   const [contract, setContract] = useState<any>(null);
   const [tokenContract, setTokenContract] = useState<any>(null);
   const [marketplaceContract, setMarketplaceContract] = useState<any>(null);
+  const [tokenBalance, setTokenBalance] = useState<string>("0");
   
   // Auth State
   const [loggedInUser, setLoggedInUser] = useState<any>(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authForm, setAuthForm] = useState({ username: "", password: "", role: "patient", walletAddress: "" });
+
+  const { language, setLanguage, t } = useLanguage();
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+
+  const LANGUAGES = [
+    { code: "en", label: "English" },
+    { code: "hi", label: "Hindi (हिंदी)" },
+    { code: "ta", label: "Tamil (தமிழ்)" },
+    { code: "te", label: "Telugu (తెలుగు)" },
+    { code: "bn", label: "Bengali (বাংলা)" },
+    { code: "mr", label: "Marathi (मराठी)" },
+    { code: "kn", label: "Kannada (ಕನ್ನಡ)" }
+  ];
 
   useEffect(() => {
     // Check for existing session
@@ -59,6 +75,25 @@ export default function Home() {
       setLoggedInUser(JSON.parse(session));
     }
   }, []);
+
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (tokenContract && account) {
+        try {
+          const balance = await tokenContract.balanceOf(account);
+          setTokenBalance(ethers.formatUnits(balance, 18));
+        } catch (e) {
+          console.error("Failed to fetch balance", e);
+        }
+      }
+    };
+    
+    fetchBalance();
+    
+    // Set up an interval to refresh balance every 10 seconds
+    const interval = setInterval(fetchBalance, 10000);
+    return () => clearInterval(interval);
+  }, [tokenContract, account]);
 
   const handleRegister = () => {
     if (!authForm.username || !authForm.password || !authForm.walletAddress) return alert("Fill all fields");
@@ -92,22 +127,21 @@ export default function Home() {
   const connectWallet = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
       try {
-        // Force MetaMask to switch to Sepolia (Chain ID 11155111 / 0xaa36a7)
+        // Force MetaMask to switch to Hardhat Localhost (Chain ID 1337 / 0x539)
         try {
           await (window as any).ethereum.request({
             method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0xaa36a7' }], 
+            params: [{ chainId: '0x539' }], 
           });
         } catch (switchError: any) {
-          // If the network is not added to MetaMask, add it automatically
           if (switchError.code === 4902) {
             await (window as any).ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [
                 {
-                  chainId: '0xaa36a7',
-                  chainName: 'Sepolia test network',
-                  rpcUrls: ['https://rpc.sepolia.org'],
+                  chainId: '0x539',
+                  chainName: 'Hardhat Localhost',
+                  rpcUrls: ['http://127.0.0.1:8545'],
                 }
               ]
             });
@@ -176,15 +210,48 @@ export default function Home() {
         <header className="flex justify-between items-center mb-16">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">
-              AEGIS-AI
+              {t("aegis_ai")}
             </h1>
-            <p className="text-gray-400 text-sm mt-1">Decentralized Healthcare Ecosystem</p>
+            <p className="text-gray-400 text-sm mt-1">{t("decentralized_healthcare")}</p>
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Premium Language Selector */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full font-medium transition-all shadow-lg backdrop-blur-md text-sm text-gray-300"
+              >
+                <Globe size={16} className="text-blue-400" />
+                <span className="hidden sm:inline">{LANGUAGES.find(l => l.code === language)?.label || t("language")}</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${isLangMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {isLangMenuOpen && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-gray-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  {LANGUAGES.map(lang => (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        setLanguage(lang.code as any);
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${language === lang.code ? 'bg-blue-500/20 text-white font-medium' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                    >
+                      {lang.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {account && tokenContract && (
+              <div className="text-emerald-400 font-bold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                💰 {tokenBalance} HLTH
+              </div>
+            )}
             {loggedInUser && (
               <div className="text-gray-400 text-sm hidden md:block">
-                Logged in as <span className="text-white font-bold">{loggedInUser.username}</span> ({loggedInUser.role})
+                {t("logged_in_as")} <span className="text-white font-bold">{loggedInUser.username}</span> ({t(loggedInUser.role)})
               </div>
             )}
             {loggedInUser && (
@@ -192,7 +259,7 @@ export default function Home() {
                 onClick={handleLogout}
                 className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-full font-medium transition-all text-sm"
               >
-                Logout
+                {t("logout")}
               </button>
             )}
             <button 
@@ -200,7 +267,7 @@ export default function Home() {
               className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full font-medium transition-all shadow-lg shadow-black/50 backdrop-blur-md flex items-center space-x-2"
             >
               <div className={`w-2 h-2 rounded-full ${account ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-              <span>{account ? `${account.substring(0,6)}...${account.substring(38)}` : "Connect Wallet"}</span>
+              <span>{account ? `${account.substring(0,6)}...${account.substring(38)}` : t("connect_your_wallet")}</span>
             </button>
           </div>
         </header>
@@ -211,23 +278,23 @@ export default function Home() {
               <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-2xl border border-white/10 flex items-center justify-center">
                 <ShieldCheck className="w-8 h-8 text-emerald-400" />
               </div>
-              <h2 className="text-2xl font-bold">{isLoginMode ? "Welcome Back" : "Create Account"}</h2>
+              <h2 className="text-2xl font-bold">{isLoginMode ? t("welcome_back") : t("create_account")}</h2>
               <p className="text-gray-400 text-sm mt-2">
-                {isLoginMode ? "Log in to access your secure medical vault." : "Register to encrypt and store your records."}
+                {isLoginMode ? t("login_subtitle") : t("register_subtitle")}
               </p>
             </div>
 
             <div className="space-y-4">
               <input 
                 type="text" 
-                placeholder="Username (e.g. rahulr13)" 
+                placeholder={t("username_placeholder")} 
                 value={authForm.username}
                 onChange={(e) => setAuthForm({...authForm, username: e.target.value.toLowerCase()})}
                 className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
               <input 
                 type="password" 
-                placeholder="Password" 
+                placeholder={t("password_placeholder")} 
                 value={authForm.password}
                 onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
                 className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
@@ -240,13 +307,13 @@ export default function Home() {
                     onChange={(e) => setAuthForm({...authForm, role: e.target.value})}
                     className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors appearance-none"
                   >
-                    <option value="patient">Patient</option>
-                    <option value="doctor">Doctor</option>
-                    <option value="researcher">Researcher</option>
+                    <option value="patient">{t("patient")}</option>
+                    <option value="doctor">{t("doctor")}</option>
+                    <option value="researcher">{t("researcher")}</option>
                   </select>
                   <input 
                     type="text" 
-                    placeholder="Wallet Address (Connect MetaMask to auto-fill)" 
+                    placeholder={t("wallet_placeholder")} 
                     value={authForm.walletAddress}
                     onChange={(e) => setAuthForm({...authForm, walletAddress: e.target.value})}
                     className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
@@ -258,7 +325,7 @@ export default function Home() {
                 onClick={isLoginMode ? handleLogin : handleRegister}
                 className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg font-medium hover:opacity-90 transition-opacity text-white mt-4"
               >
-                {isLoginMode ? "Sign In" : "Register Account"}
+                {isLoginMode ? t("sign_in") : t("register_account")}
               </button>
             </div>
 
@@ -274,9 +341,9 @@ export default function Home() {
             <div className="w-24 h-24 mb-8 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-3xl border border-white/10 flex items-center justify-center">
               <Zap className="w-12 h-12 text-emerald-400" />
             </div>
-            <h2 className="text-4xl font-bold mb-4">Connect Your Wallet</h2>
+            <h2 className="text-4xl font-bold mb-4">{t("connect_your_wallet")}</h2>
             <p className="text-gray-400 max-w-md text-lg">
-              You are logged in as {loggedInUser.username}, but we need your Web3 wallet connected to interact with the blockchain.
+              {t("logged_in_as")} {loggedInUser.username}, {t("wallet_missing_desc") || "but we need your Web3 wallet connected to interact with the blockchain."}
             </p>
           </div>
         ) : (
