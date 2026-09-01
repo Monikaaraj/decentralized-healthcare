@@ -54,13 +54,29 @@ export const uploadToIPFS = async (encryptedBlob: string): Promise<string> => {
  * Fetches data from Pinata IPFS gateway via backend proxy.
  */
 export const fetchFromIPFS = async (cid: string): Promise<string | null> => {
-  try {
-    const res = await fetch(`https://gateway.pinata.cloud/ipfs/${cid}`);
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data || null;
-  } catch (err) {
-    console.error("IPFS Fetch Error:", err);
-    return null;
+  // IPFS gateways to try in order of typical speed/reliability
+  const gateways = [
+    `https://gateway.pinata.cloud/ipfs/${cid}`,
+    `https://cloudflare-ipfs.com/ipfs/${cid}`,
+    `https://ipfs.io/ipfs/${cid}`,
+    `https://dweb.link/ipfs/${cid}`
+  ];
+
+  for (const url of gateways) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.data) {
+          return json.data;
+        }
+      }
+    } catch (err) {
+      // Ignore network errors and silently fallback to the next gateway
+      continue;
+    }
   }
+  
+  console.error("All IPFS gateways failed to fetch the CID:", cid);
+  return null;
 };
