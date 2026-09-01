@@ -127,6 +127,9 @@ export default function Home() {
   const connectWallet = async () => {
     if (typeof window !== "undefined" && (window as any).ethereum) {
       try {
+        // Request account access first
+        await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+
         // Force MetaMask to switch to Hardhat Localhost (Chain ID 1337 / 0x539)
         try {
           await (window as any).ethereum.request({
@@ -151,8 +154,6 @@ export default function Home() {
         }
 
         const provider = new ethers.BrowserProvider((window as any).ethereum);
-        // Explicitly request connection to MetaMask
-        await provider.send("eth_requestAccounts", []);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
         setAccount(address);
