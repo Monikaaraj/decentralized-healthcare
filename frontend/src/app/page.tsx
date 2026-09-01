@@ -151,6 +151,8 @@ export default function Home() {
         }
 
         const provider = new ethers.BrowserProvider((window as any).ethereum);
+        // Explicitly request connection to MetaMask
+        await provider.send("eth_requestAccounts", []);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
         setAccount(address);
