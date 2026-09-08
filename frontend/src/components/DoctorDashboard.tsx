@@ -5,7 +5,7 @@ import { COMMON_MEDICINES } from "@/utils/medicines";
 import { FileSearch, LockOpen, UploadCloud, FileText, Search, PlusCircle, Trash2, Download } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 
-export default function DoctorDashboard({ contract, account }: { contract: any; account: string }) {
+export default function DoctorDashboard({ contract, account, username }: { contract: any; account: string; username: string }) {
   const { t } = useLanguage();
   const [patientAddress, setPatientAddress] = useState("");
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
@@ -75,7 +75,7 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
       const cid = await uploadToIPFS(encrypted);
       
       setUploadStatus("Anchoring to blockchain on behalf of patient...");
-      const tx = await contract.addRecordForPatient(resolvedAddress, cid);
+      const tx = await contract.addRecordForPatient(resolvedAddress, cid, username);
       await tx.wait();
       setUploadStatus(`Success! Record anchored to ${uploadPatientAddress}.`);
     } catch (err: any) {
@@ -269,7 +269,10 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   };
 
   return (
-    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl">
+    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+      {/* Animated soft border effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+      <div className="relative z-10">
       <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
         <FileSearch className="text-blue-400" /> {t("doctor_portal")}
       </h2>
@@ -535,6 +538,7 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

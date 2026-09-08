@@ -142,7 +142,9 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in duration-500">
       
       {/* --- Data Marketplace Section --- */}
-      <div className="bg-white/5 border border-indigo-500/30 p-8 rounded-2xl backdrop-blur-xl relative overflow-hidden group">
+      <div className="bg-white/5 border border-indigo-500/30 p-8 rounded-2xl backdrop-blur-xl relative overflow-hidden group shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-indigo-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+        <div className="relative z-10">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-6">
           Decentralized Data Marketplace
         </h2>
@@ -214,10 +216,13 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* --- Federated Learning Section --- */}
-      <div className="bg-white/5 border border-purple-500/30 p-8 rounded-2xl backdrop-blur-xl relative overflow-hidden group">
+      <div className="bg-white/5 border border-purple-500/30 p-8 rounded-2xl backdrop-blur-xl relative overflow-hidden group shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-purple-500/10 to-pink-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+        <div className="relative z-10">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-6">
           Federated Diagnostic Model Training
         </h2>
@@ -262,6 +267,7 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

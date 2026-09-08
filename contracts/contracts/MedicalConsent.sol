@@ -22,11 +22,28 @@ contract MedicalConsent is Ownable {
     // Mapping for consent: patient -> doctor -> bool
     mapping(address => mapping(address => bool)) public consent;
 
+    // Struct for Doctor Verification via NMC
+    struct DoctorApplication {
+        string username;
+        string name;
+        string licenseNumber;
+        bool hasApplied;
+        bool isApproved;
+        bool isRejected;
+    }
+
+    mapping(string => DoctorApplication) public doctorProfiles;
+    string[] public doctorUsernames;
+
     // Events
     event RecordAdded(address indexed patient, uint256 indexed recordId, string cid);
     event ConsentGranted(address indexed patient, address indexed doctor);
     event ConsentRevoked(address indexed patient, address indexed doctor);
     event RecordDeleted(address indexed patient, uint256 indexed recordId);
+    event DoctorApplied(string username, string name, string licenseNumber);
+    event DoctorVerified(string username);
+    event DoctorRejected(string username);
+    event DevDataReset();
 
     constructor() Ownable(msg.sender) {}
 
@@ -45,7 +62,8 @@ contract MedicalConsent is Ownable {
     }
 
     // Doctor adds a medical record for a specific patient
-    function addRecordForPatient(address _patient, string memory _cid) external {
+    function addRecordForPatient(address _patient, string memory _cid, string memory _doctorUsername) external {
+        require(doctorProfiles[_doctorUsername].isApproved, "Access Denied: Not a verified doctor");
         require(consent[_patient][msg.sender], "Access Denied: Doctor does not have consent");
         
         uint256 recordId = patientRecordCount[_patient];
@@ -102,5 +120,51 @@ contract MedicalConsent is Ownable {
         patientRecords[msg.sender][_recordId].cid = "";
         
         emit RecordDeleted(msg.sender, _recordId);
+    }
+
+    // Apply for NMC Verification
+    function applyForVerification(string memory _username, string memory _name, string memory _licenseNumber) external {
+        require(!doctorProfiles[_username].hasApplied, "Already applied");
+        doctorProfiles[_username] = DoctorApplication({
+            username: _username,
+            name: _name,
+            licenseNumber: _licenseNumber,
+            hasApplied: true,
+            isApproved: false,
+            isRejected: false
+        });
+        doctorUsernames.push(_username);
+        emit DoctorApplied(_username, _name, _licenseNumber);
+    }
+
+    // NMC Admin approves a doctor
+    function approveDoctor(string memory _username) external onlyOwner {
+        require(doctorProfiles[_username].hasApplied, "Doctor has not applied");
+        doctorProfiles[_username].isApproved = true;
+        doctorProfiles[_username].isRejected = false;
+        emit DoctorVerified(_username);
+    }
+
+    // NMC Admin rejects a doctor
+    function rejectDoctor(string memory _username) external onlyOwner {
+        require(doctorProfiles[_username].hasApplied, "Doctor has not applied");
+        doctorProfiles[_username].isApproved = false;
+        doctorProfiles[_username].isRejected = true;
+        emit DoctorRejected(_username);
+    }
+
+    // Fetch all doctor usernames (for NMC Portal)
+    function getAllDoctors() external view returns (string[] memory) {
+        return doctorUsernames;
+    }
+
+    // Dev utility: Reset all data
+    function resetDevData() external {
+        for (uint i = 0; i < doctorUsernames.length; i++) {
+            delete doctorProfiles[doctorUsernames[i]];
+        }
+        delete doctorUsernames;
+
+        emit DevDataReset();
     }
 }
