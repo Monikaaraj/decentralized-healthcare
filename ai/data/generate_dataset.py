@@ -35,7 +35,11 @@ def generate_synthetic_data(num_samples: int = 1000, seed: int = 42, output_path
     # Target label: 1 if high risk, 0 if low risk
     target = (final_score > 1.0).astype(int)
     
+    # Dummy patient IDs
+    patient_ids = [f"PATIENT_{i}" for i in range(num_samples)]
+
     df = pd.DataFrame({
+        'PATIENT': patient_ids,
         'age': age,
         'glucose': glucose,
         'blood_pressure': blood_pressure,
