@@ -77,5 +77,45 @@ def test_submit_local_update_and_aggregation():
     assert metrics_resp.status_code == 200
 
 
+def test_document_ocr_and_scanning():
+    report_text = """
+    ST. JUDE MEDICAL CENTER
+    Patient Name: Alice Smith
+    Age: 19
+    Gender: Female
+    Phone: +91 9988776655
+    Blood Pressure: 118/76 mmHg
+    Fasting Blood Sugar: 92 mg/dL
+    Hemoglobin: 13.8 g/dL
+    Total Cholesterol: 175 mg/dL
+    Impression: Clear lung fields, normal sinus rhythm.
+    """
+    resp = client.post("/api/scan_document", json={
+        "text": report_text,
+        "filename": "alice_lab_report.pdf"
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "success"
+    extracted = data["extracted_data"]
+
+    # 1. PII Masking & Age Interval
+    demographics = extracted["masked_demographics"]
+    assert demographics["patient_name"] == "Patient [REDACTED]"
+    assert demographics["phone_number"] == "[REDACTED]"
+    assert demographics["age_interval"] == "18-22"  # 19 classified into 18-22
+
+    # 2. Exact Readings (No intervals for readings)
+    readings = extracted["exact_readings"]
+    assert readings["blood_pressure"] == "118/76 mmHg"
+    assert readings["glucose"] == "92 mg/dL"
+    assert readings["hemoglobin"] == "13.8 g/dL"
+    assert readings["total_cholesterol"] == "175 mg/dL"
+
+    # 3. Only details present in the document
+    assert "white_blood_cells" not in readings
+    assert "serum_creatinine" not in readings
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
 contract MedicalConsent is Ownable {
     
@@ -11,11 +12,15 @@ contract MedicalConsent is Ownable {
         uint256 timestamp;
         address uploader;
         bool exists;
+        bytes32 merkleRoot; // Non-zero if anchored via Merkle Tree batch
     }
 
     // Mapping from patient address -> record ID -> Record
     mapping(address => mapping(uint256 => Record)) private patientRecords;
     
+    // Mapping from (patient address, CID) -> uploader (to lookup doctor royalty on research fulfillment)
+    mapping(address => mapping(string => address)) public recordUploaderByCid;
+
     // Mapping from patient address -> record count
     mapping(address => uint256) public patientRecordCount;
 
@@ -35,8 +40,19 @@ contract MedicalConsent is Ownable {
     mapping(string => DoctorApplication) public doctorProfiles;
     string[] public doctorUsernames;
 
+    // Merkle Tree Batch Storage
+    struct MerkleBatch {
+        bytes32 root;
+        uint256 timestamp;
+        address doctor;
+        uint256 recordCount;
+    }
+    mapping(bytes32 => MerkleBatch) public merkleBatches;
+    bytes32[] public batchRootsHistory;
+
     // Events
     event RecordAdded(address indexed patient, uint256 indexed recordId, string cid);
+    event MerkleBatchCommitted(bytes32 indexed merkleRoot, address indexed doctor, uint256 recordCount);
     event ConsentGranted(address indexed patient, address indexed doctor);
     event ConsentRevoked(address indexed patient, address indexed doctor);
     event RecordDeleted(address indexed patient, uint256 indexed recordId);
@@ -47,21 +63,23 @@ contract MedicalConsent is Ownable {
 
     constructor() Ownable(msg.sender) {}
 
-    // Add a new medical record (IPFS CID)
+    // Add a new medical record (IPFS CID) directly by patient
     function addRecord(string memory _cid) external {
         uint256 recordId = patientRecordCount[msg.sender];
         patientRecords[msg.sender][recordId] = Record({
             cid: _cid,
             timestamp: block.timestamp,
             uploader: msg.sender,
-            exists: true
+            exists: true,
+            merkleRoot: bytes32(0)
         });
         patientRecordCount[msg.sender]++;
+        recordUploaderByCid[msg.sender][_cid] = msg.sender;
 
         emit RecordAdded(msg.sender, recordId, _cid);
     }
 
-    // Doctor adds a medical record for a specific patient
+    // Doctor adds an individual medical record for a specific patient
     function addRecordForPatient(address _patient, string memory _cid, string memory _doctorUsername) external {
         require(doctorProfiles[_doctorUsername].isApproved, "Access Denied: Not a verified doctor");
         require(consent[_patient][msg.sender], "Access Denied: Doctor does not have consent");
@@ -71,11 +89,75 @@ contract MedicalConsent is Ownable {
             cid: _cid,
             timestamp: block.timestamp,
             uploader: msg.sender,
-            exists: true
+            exists: true,
+            merkleRoot: bytes32(0)
         });
         patientRecordCount[_patient]++;
+        recordUploaderByCid[_patient][_cid] = msg.sender;
 
         emit RecordAdded(_patient, recordId, _cid);
+    }
+
+    /**
+     * @notice Merkle Tree Batch Upload:
+     * Commits a cryptographic Merkle Root representing N prescriptions in ONE single transaction,
+     * while simultaneously routing each prescription directly into each patient's individual account!
+     * Saves massive gas and allows 1-click batching for doctors.
+     */
+    function commitMerkleBatch(
+        bytes32 _merkleRoot,
+        address[] calldata _patients,
+        string[] calldata _cids,
+        string calldata _doctorUsername
+    ) external {
+        require(doctorProfiles[_doctorUsername].isApproved, "Access Denied: Not a verified doctor");
+        require(_patients.length == _cids.length, "Mismatched patients and CIDs length");
+        require(_patients.length > 0, "Empty batch");
+
+        // 1. Anchor the 32-byte Merkle Root on-chain
+        merkleBatches[_merkleRoot] = MerkleBatch({
+            root: _merkleRoot,
+            timestamp: block.timestamp,
+            doctor: msg.sender,
+            recordCount: _patients.length
+        });
+        batchRootsHistory.push(_merkleRoot);
+
+        // 2. Deliver each prescription directly into each patient's account
+        for (uint256 i = 0; i < _patients.length; i++) {
+            address patient = _patients[i];
+            require(consent[patient][msg.sender], "Access Denied: Doctor does not have consent for patient");
+
+            uint256 recordId = patientRecordCount[patient];
+            patientRecords[patient][recordId] = Record({
+                cid: _cids[i],
+                timestamp: block.timestamp,
+                uploader: msg.sender,
+                exists: true,
+                merkleRoot: _merkleRoot
+            });
+            patientRecordCount[patient]++;
+            recordUploaderByCid[patient][_cids[i]] = msg.sender;
+
+            emit RecordAdded(patient, recordId, _cids[i]);
+        }
+
+        emit MerkleBatchCommitted(_merkleRoot, msg.sender, _patients.length);
+    }
+
+    /**
+     * @notice Cryptographic verification of any prescription against its Merkle Root
+     */
+    function verifyPrescriptionProof(
+        bytes32 _merkleRoot,
+        bytes32[] calldata _proof,
+        address _patient,
+        string calldata _cid,
+        uint256 _timestamp
+    ) external view returns (bool) {
+        require(merkleBatches[_merkleRoot].timestamp > 0, "Merkle Root not registered");
+        bytes32 leaf = keccak256(abi.encodePacked(_patient, _cid, _timestamp));
+        return MerkleProof.verify(_proof, _merkleRoot, leaf);
     }
 
     // Grant access to a doctor
@@ -109,6 +191,11 @@ contract MedicalConsent is Ownable {
             "Access Denied: No consent from patient"
         );
         return patientRecordCount[_patient];
+    }
+
+    // Lookup who uploaded / authorized a specific CID for a patient (used for royalty distribution)
+    function getUploaderOfCid(address _patient, string memory _cid) external view returns (address) {
+        return recordUploaderByCid[_patient][_cid];
     }
 
     // Delete a medical record

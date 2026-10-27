@@ -14,6 +14,8 @@ import Hero3D from "@/components/Hero3D";
 const CONTRACT_ABI = [
   "function addRecord(string memory _cid) external",
   "function addRecordForPatient(address _patient, string memory _cid, string memory _doctorUsername) external",
+  "function commitMerkleBatch(bytes32 _merkleRoot, address[] calldata _patients, string[] calldata _cids, string calldata _doctorUsername) external",
+  "function verifyPrescriptionProof(bytes32 _merkleRoot, bytes32[] calldata _proof, address _patient, string calldata _cid, uint256 _timestamp) external view returns (bool)",
   "function grantConsent(address _doctor) public",
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
@@ -34,8 +36,9 @@ const MARKETPLACE_ABI = [
   "function cancelBounty(uint256 _bountyId) public",
   "function nextBountyId() public view returns (uint256)",
   "function bounties(uint256) public view returns (address creator, string description, uint256 rewardPerFulfillment, uint256 remainingEscrow, bool isActive)",
+  "function DOCTOR_ROYALTY_BPS() public view returns (uint256)",
   "event BountyCreated(uint256 indexed bountyId, address indexed creator, string description, uint256 reward, uint256 totalEscrow)",
-  "event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward)"
+  "event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward, address indexed doctor, uint256 doctorRoyalty)"
 ];
 
 const TOKEN_ABI = [

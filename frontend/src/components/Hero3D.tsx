@@ -127,7 +127,7 @@ const Hero3D = () => {
         <DNAHelix />
         <Particles />
         
-        <EffectComposer disableNormalPass>
+        <EffectComposer>
           <Bloom luminanceThreshold={0.5} luminanceSmoothing={0.9} height={300} intensity={0.4} />
         </EffectComposer>
 

@@ -213,9 +213,17 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     if (!marketplaceContract || !sellCID) return alert("Please select a record to fulfill the bounty with.");
     setStatus("Fulfilling bounty...");
     try {
+      const selectedRecord = records.find(r => r.cid === sellCID);
+      const isDoctorAuthored = selectedRecord && selectedRecord.uploader.toLowerCase() !== account.toLowerCase();
+
       const tx = await marketplaceContract.fulfillBounty(bountyId, sellCID);
       await tx.wait();
-      setStatus("Success! Bounty fulfilled and HLTH tokens earned.");
+      
+      if (isDoctorAuthored) {
+        setStatus("Success! Bounty fulfilled: You received 80% of reward and the verified Doctor received a 20% Royalty!");
+      } else {
+        setStatus("Success! Bounty fulfilled and 100% HLTH tokens earned.");
+      }
       fetchBounties(); // refresh
     } catch (err: any) {
       console.error(err);
@@ -453,7 +461,7 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
                           const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
                           return (
                             <option key={record.id} value={record.cid}>
-                              Record #{record.id} (Uploaded by {isSelf ? 'You' : 'Doctor'})
+                              Record #{record.id} ({isSelf ? 'Self Uploaded - 100% Reward' : 'Doctor Verified - 80% to You / 20% Doctor Royalty'})
                             </option>
                           );
                         })}
