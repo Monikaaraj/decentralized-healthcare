@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+data/silos/
+models/*.pt
+models/federated_history.json
+.pytest_cache/
