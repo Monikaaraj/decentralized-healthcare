@@ -5,6 +5,7 @@ import subprocess
 import json
 import os
 import time
+import sys
 from ocr import extract_text
 
 app = FastAPI(title="AEGIS-AI API")
@@ -34,7 +35,7 @@ def run_fl_simulation():
         
     print("Starting FL Server...")
     # Run the server
-    server_process = subprocess.Popen(["venv/bin/python", "fl_server.py"])
+    server_process = subprocess.Popen([sys.executable, "fl_server.py"])
     
     time.sleep(3) # Wait for server to start
     
@@ -42,7 +43,7 @@ def run_fl_simulation():
     # Run 3 clients
     client_processes = []
     for i in range(3):
-        p = subprocess.Popen(["venv/bin/python", "fl_client_node.py", f"Hospital_{i+1}"])
+        p = subprocess.Popen([sys.executable, "fl_client_node.py", f"Hospital_{i+1}"])
         client_processes.append(p)
         
     # Wait for server to finish
