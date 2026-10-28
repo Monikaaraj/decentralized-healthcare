@@ -1,0 +1,18 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev -- --webpack",
+  "env": {
+    "NEXT_PUBLIC_CONTRACT_ADDRESS": "@aegis_contract_address",
+    "NEXT_PUBLIC_TOKEN_ADDRESS": "@aegis_token_address",
+    "NEXT_PUBLIC_MARKETPLACE_ADDRESS": "@aegis_marketplace_address",
+    "NEXT_PUBLIC_CHAIN_ID": "@aegis_chain_id",
+    "NEXT_PUBLIC_CHAIN_NAME": "@aegis_chain_name",
+    "NEXT_PUBLIC_RPC_URL": "@aegis_rpc_url",
+    "NEXT_PUBLIC_NMC_PORTAL_URL": "@aegis_nmc_portal_url",
+    "FL_API_URL": "@aegis_fl_api_url",
+    "GEMINI_API_KEY": "@gemini_api_key"
+  }
+}

@@ -4,7 +4,8 @@ import path from 'path';
 
 export async function POST() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/start_simulation?num_rounds=3', {
+    const FL_API = process.env.FL_API_URL ?? 'http://127.0.0.1:8000';
+    const res = await fetch(`${FL_API}/start_simulation?num_rounds=3`, {
       method: 'POST'
     });
     if (res.ok) {

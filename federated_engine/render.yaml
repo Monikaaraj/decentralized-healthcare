@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: aegis-ai-fl
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn node_api:app --host 0.0.0.0 --port $PORT
+    rootDir: federated_engine
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0

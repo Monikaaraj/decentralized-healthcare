@@ -3,9 +3,10 @@ import fs from 'fs';
 import path from 'path';
 
 export async function GET() {
-  // 1. Try real federated engine on :8000 first
+  // 1. Try real federated engine first
   try {
-    const res = await fetch('http://127.0.0.1:8000/metrics', { cache: 'no-store' });
+    const FL_API = process.env.FL_API_URL ?? 'http://127.0.0.1:8000';
+    const res = await fetch(`${FL_API}/metrics`, { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.status === "training" || data.status === "completed" || (data.rounds && data.rounds.length > 0)) {

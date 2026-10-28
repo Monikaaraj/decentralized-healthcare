@@ -133,9 +133,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { base64_data, filename, text } = body;
 
-    // 1. Try calling the Python backend OCR service on port 8000 first
+    // 1. Try calling the Python backend OCR service first
     try {
-      const pyRes = await fetch('http://127.0.0.1:8000/api/scan_document', {
+      const FL_API = process.env.FL_API_URL ?? 'http://127.0.0.1:8000';
+      const pyRes = await fetch(`${FL_API}/api/scan_document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64_data, filename, text })
