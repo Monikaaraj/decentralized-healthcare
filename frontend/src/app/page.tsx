@@ -48,10 +48,10 @@ const TOKEN_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// Contract addresses — set via env vars (Vercel/production) or fallback to local Hardhat
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_ADDRESS ?? "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const MARKETPLACE_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS ?? "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+// Addresses from Local Hardhat Node
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; 
+const TOKEN_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const MARKETPLACE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 export default function Home() {
   const [account, setAccount] = useState<string>("");
@@ -121,7 +121,7 @@ export default function Home() {
     setLoggedInUser(authForm);
     
     if (authForm.role === 'doctor') {
-      window.open(`${process.env.NEXT_PUBLIC_NMC_PORTAL_URL ?? 'http://localhost:3001'}?doctor=${authForm.username}`, "_blank");
+      window.open(`http://localhost:3001?doctor=${authForm.username}`, "_blank");
     }
   };
 
@@ -192,9 +192,9 @@ export default function Home() {
               method: 'wallet_addEthereumChain',
               params: [
                 {
-                  chainId: process.env.NEXT_PUBLIC_CHAIN_ID ?? '0x539',
-                  chainName: process.env.NEXT_PUBLIC_CHAIN_NAME ?? 'Hardhat Localhost',
-                  rpcUrls: [process.env.NEXT_PUBLIC_RPC_URL ?? 'http://127.0.0.1:8545'],
+                  chainId: '0x539',
+                  chainName: 'Hardhat Localhost',
+                  rpcUrls: ['http://127.0.0.1:8545'],
                 }
               ]
             });
@@ -393,7 +393,7 @@ export default function Home() {
 
               {authForm.username === 'admin' ? (
                 <a 
-                  href={`${process.env.NEXT_PUBLIC_NMC_PORTAL_URL ?? 'http://localhost:3001'}?admin=true`}
+                  href="http://localhost:3001?admin=true"
                   className="block w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg font-medium hover:opacity-90 transition-opacity text-white mt-4 text-center shadow-lg shadow-blue-500/25"
                 >
                   Sign in to NMC Portal (Admin)
