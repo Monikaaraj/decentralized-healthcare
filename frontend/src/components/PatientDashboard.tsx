@@ -213,9 +213,17 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
     if (!marketplaceContract || !sellCID) return alert("Please select a record to fulfill the bounty with.");
     setStatus("Fulfilling bounty...");
     try {
+      const selectedRecord = records.find(r => r.cid === sellCID);
+      const isDoctorAuthored = selectedRecord && selectedRecord.uploader.toLowerCase() !== account.toLowerCase();
+
       const tx = await marketplaceContract.fulfillBounty(bountyId, sellCID);
       await tx.wait();
-      setStatus("Success! Bounty fulfilled and HLTH tokens earned.");
+      
+      if (isDoctorAuthored) {
+        setStatus("Success! Bounty fulfilled: You received 80% of reward and the verified Doctor received a 20% Royalty!");
+      } else {
+        setStatus("Success! Bounty fulfilled and 100% HLTH tokens earned.");
+      }
       fetchBounties(); // refresh
     } catch (err: any) {
       console.error(err);
@@ -224,7 +232,10 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
   };
 
   return (
-    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl">
+    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+      {/* Animated soft border effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+      <div className="relative z-10">
       <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
         <FileText className="text-emerald-400" /> {t("patient_digital_passport")}
       </h2>
@@ -450,7 +461,7 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
                           const isSelf = record.uploader.toLowerCase() === account.toLowerCase();
                           return (
                             <option key={record.id} value={record.cid}>
-                              Record #{record.id} (Uploaded by {isSelf ? 'You' : 'Doctor'})
+                              Record #{record.id} ({isSelf ? 'Self Uploaded - 100% Reward' : 'Doctor Verified - 80% to You / 20% Doctor Royalty'})
                             </option>
                           );
                         })}
@@ -471,6 +482,7 @@ export default function PatientDashboard({ contract, marketplaceContract, accoun
         )}
 
         {status && <div className="p-4 bg-blue-500/10 text-blue-400 rounded-lg border border-blue-500/20">{status}</div>}
+      </div>
       </div>
     </div>
   );

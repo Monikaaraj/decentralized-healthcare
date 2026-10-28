@@ -7,18 +7,27 @@ import DoctorDashboard from "@/components/DoctorDashboard";
 import ResearchDashboard from "@/components/ResearchDashboard";
 import { Activity, ShieldCheck, Zap, Globe, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { motion, AnimatePresence } from "framer-motion";
+import Hero3D from "@/components/Hero3D";
 
 // Mock ABI for the MedicalConsent contract
 const CONTRACT_ABI = [
   "function addRecord(string memory _cid) external",
-  "function addRecordForPatient(address _patient, string memory _cid) external",
+  "function addRecordForPatient(address _patient, string memory _cid, string memory _doctorUsername) external",
+  "function commitMerkleBatch(bytes32 _merkleRoot, address[] calldata _patients, string[] calldata _cids, string calldata _doctorUsername) external",
+  "function verifyPrescriptionProof(bytes32 _merkleRoot, bytes32[] calldata _proof, address _patient, string calldata _cid, uint256 _timestamp) external view returns (bool)",
   "function grantConsent(address _doctor) public",
   "function revokeConsent(address _doctor) public",
   "function hasConsent(address _patient, address _doctor) public view returns (bool)",
   "function getPatientRecords(address _patient) public view returns (string[] memory)",
   "function getRecord(address _patient, uint256 _recordId) external view returns (string memory cid, address uploader, uint256 timestamp)",
   "function getRecordCount(address _patient) external view returns (uint256)",
-  "function deleteRecord(uint256 _recordId) external"
+  "function doctorProfiles(string) public view returns (string username, string name, string licenseNumber, bool hasApplied, bool isApproved, bool isRejected)",
+  "function resetDevData() external",
+  "event DoctorApplied(string username, string name, string licenseNumber)",
+  "event DoctorVerified(string username)",
+  "event DoctorRejected(string username)",
+  "event DevDataReset()"
 ];
 
 const MARKETPLACE_ABI = [
@@ -27,8 +36,9 @@ const MARKETPLACE_ABI = [
   "function cancelBounty(uint256 _bountyId) public",
   "function nextBountyId() public view returns (uint256)",
   "function bounties(uint256) public view returns (address creator, string description, uint256 rewardPerFulfillment, uint256 remainingEscrow, bool isActive)",
+  "function DOCTOR_ROYALTY_BPS() public view returns (uint256)",
   "event BountyCreated(uint256 indexed bountyId, address indexed creator, string description, uint256 reward, uint256 totalEscrow)",
-  "event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward)"
+  "event BountyFulfilled(uint256 indexed bountyId, address indexed fulfiller, string ipfsCID, uint256 reward, address indexed doctor, uint256 doctorRoyalty)"
 ];
 
 const TOKEN_ABI = [
@@ -54,6 +64,7 @@ export default function Home() {
   const [loggedInUser, setLoggedInUser] = useState<any>(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [authForm, setAuthForm] = useState({ username: "", password: "", role: "patient", walletAddress: "" });
+  const [docVerifStatus, setDocVerifStatus] = useState<"none" | "pending" | "verified">("none");
 
   const { language, setLanguage, t } = useLanguage();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
@@ -76,6 +87,8 @@ export default function Home() {
     }
   }, []);
 
+  // Removed docVerifStatus from login page; it will be handled inside DoctorDashboard.
+  
   useEffect(() => {
     const fetchBalance = async () => {
       if (tokenContract && account) {
@@ -106,6 +119,10 @@ export default function Home() {
     // Auto login
     localStorage.setItem("aegis_session", JSON.stringify(authForm));
     setLoggedInUser(authForm);
+    
+    if (authForm.role === 'doctor') {
+      window.open(`http://localhost:3001?doctor=${authForm.username}`, "_blank");
+    }
   };
 
   const handleLogin = () => {
@@ -122,6 +139,39 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem("aegis_session");
     setLoggedInUser(null);
+  };
+
+  const handleResetDevData = async () => {
+    if (confirm("Are you sure you want to delete all registered accounts in this browser?")) {
+      let activeContract = contract;
+      
+      // If wallet is not connected, try to get the signer directly
+      if (!activeContract && typeof window !== "undefined" && (window as any).ethereum) {
+        try {
+          await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+          const provider = new ethers.BrowserProvider((window as any).ethereum);
+          const signer = await provider.getSigner();
+          activeContract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+        } catch (e) {
+          console.error("Could not connect wallet for reset", e);
+        }
+      }
+
+      if (activeContract) {
+        try {
+          const tx = await activeContract.resetDevData();
+          await tx.wait();
+        } catch (e) {
+          console.warn("Silent failure: Blockchain reset failed (likely due to MetaMask block cache), but local accounts will still be cleared.");
+        }
+      } else {
+        alert("Warning: MetaMask is not connected. The blockchain data cannot be reset!");
+      }
+      
+      localStorage.removeItem("aegis_users");
+      localStorage.removeItem("aegis_session");
+      window.location.reload();
+    }
   };
 
   const connectWallet = async () => {
@@ -204,18 +254,25 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#0A0A0A] text-white selection:bg-emerald-500/30 overflow-hidden relative">
-      {/* Background Gradients */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/20 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
+    <main className="min-h-screen bg-[#0A0A0A] text-white selection:bg-emerald-500/30 overflow-hidden relative font-sans">
+      <Hero3D />
       
-      <div className="max-w-6xl mx-auto px-6 py-12 relative z-10">
-        <header className="flex justify-between items-center mb-16">
+      {/* Background Gradients (Kept for depth) */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/10 rounded-full blur-[150px] pointer-events-none z-0" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[150px] pointer-events-none z-0" />
+      
+      <div className="max-w-6xl mx-auto px-6 py-12 relative z-10 pointer-events-auto">
+        <motion.header 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="flex justify-between items-center mb-16"
+        >
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">
               {t("aegis_ai")}
             </h1>
-            <p className="text-gray-400 text-sm mt-1">{t("decentralized_healthcare")}</p>
+            <p className="text-gray-400 text-sm mt-1 font-medium">{t("decentralized_healthcare")}</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -223,15 +280,15 @@ export default function Home() {
             <div className="relative">
               <button 
                 onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full font-medium transition-all shadow-lg backdrop-blur-md text-sm text-gray-300"
+                className="flex items-center gap-2 px-4 py-2.5 bg-black/40 hover:bg-black/60 border border-white/10 shadow-sm rounded-full font-medium transition-all backdrop-blur-md text-sm text-gray-300"
               >
-                <Globe size={16} className="text-blue-400" />
+                <Globe size={16} className="text-emerald-400" />
                 <span className="hidden sm:inline">{LANGUAGES.find(l => l.code === language)?.label || t("language")}</span>
                 <ChevronDown size={14} className={`transition-transform duration-200 ${isLangMenuOpen ? 'rotate-180' : ''}`} />
               </button>
               
               {isLangMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-48 bg-gray-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="absolute top-full right-0 mt-2 w-48 bg-black/90 border border-white/10 rounded-xl shadow-xl py-2 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 backdrop-blur-xl">
                   {LANGUAGES.map(lang => (
                     <button
                       key={lang.code}
@@ -239,7 +296,7 @@ export default function Home() {
                         setLanguage(lang.code as any);
                         setIsLangMenuOpen(false);
                       }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${language === lang.code ? 'bg-blue-500/20 text-white font-medium' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${language === lang.code ? 'bg-emerald-500/20 text-emerald-400 font-medium' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
                     >
                       {lang.label}
                     </button>
@@ -248,7 +305,7 @@ export default function Home() {
               )}
             </div>
             {account && tokenContract && (
-              <div className="text-emerald-400 font-bold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 text-sm flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <div className="text-emerald-400 font-bold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20 text-sm flex items-center gap-2 shadow-sm">
                 💰 {tokenBalance} HLTH
               </div>
             )}
@@ -260,47 +317,57 @@ export default function Home() {
             {loggedInUser && (
               <button 
                 onClick={handleLogout}
-                className="px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-full font-medium transition-all text-sm"
+                className="px-4 py-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-full font-medium transition-all text-sm"
               >
                 {t("logout")}
               </button>
             )}
             <button 
               onClick={connectWallet}
-              className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full font-medium transition-all shadow-lg shadow-black/50 backdrop-blur-md flex items-center space-x-2"
+              className="px-6 py-2.5 bg-white/5 border border-white/10 rounded-full font-medium transition-all shadow-sm hover:bg-white/10 text-white flex items-center space-x-2"
             >
-              <div className={`w-2 h-2 rounded-full ${account ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+              <div className={`w-2 h-2 rounded-full ${account ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
               <span>{account ? `${account.substring(0,6)}...${account.substring(38)}` : t("connect_your_wallet")}</span>
             </button>
           </div>
-        </header>
+        </motion.header>
 
-        {!loggedInUser ? (
-          <div className="max-w-md mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-xl shadow-2xl">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-2xl border border-white/10 flex items-center justify-center">
+        <AnimatePresence mode="wait">
+          {!loggedInUser ? (
+            <motion.div 
+              key="login"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.5 }}
+              className="max-w-md mx-auto bg-white/5 border border-white/10 shadow-2xl rounded-2xl p-8 backdrop-blur-2xl relative overflow-hidden group text-white"
+            >
+              {/* Animated soft border effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+            <div className="text-center mb-8 relative z-10">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-2xl border border-white/10 flex items-center justify-center shadow-inner">
                 <ShieldCheck className="w-8 h-8 text-emerald-400" />
               </div>
-              <h2 className="text-2xl font-bold">{isLoginMode ? t("welcome_back") : t("create_account")}</h2>
-              <p className="text-gray-400 text-sm mt-2">
+              <h2 className="text-2xl font-bold text-white">{isLoginMode ? t("welcome_back") : t("create_account")}</h2>
+              <p className="text-gray-400 text-sm mt-2 font-medium">
                 {isLoginMode ? t("login_subtitle") : t("register_subtitle")}
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 relative z-10">
               <input 
                 type="text" 
                 placeholder={t("username_placeholder")} 
                 value={authForm.username}
                 onChange={(e) => setAuthForm({...authForm, username: e.target.value.toLowerCase()})}
-                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm placeholder-gray-500"
               />
               <input 
                 type="password" 
                 placeholder={t("password_placeholder")} 
                 value={authForm.password}
                 onChange={(e) => setAuthForm({...authForm, password: e.target.value})}
-                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm placeholder-gray-500"
               />
               
               {!isLoginMode && (
@@ -308,7 +375,7 @@ export default function Home() {
                   <select 
                     value={authForm.role}
                     onChange={(e) => setAuthForm({...authForm, role: e.target.value})}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors appearance-none"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm appearance-none cursor-pointer"
                   >
                     <option value="patient">{t("patient")}</option>
                     <option value="doctor">{t("doctor")}</option>
@@ -319,43 +386,76 @@ export default function Home() {
                     placeholder={t("wallet_placeholder")} 
                     value={authForm.walletAddress}
                     onChange={(e) => setAuthForm({...authForm, walletAddress: e.target.value})}
-                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 transition-colors text-sm"
+                    className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm text-sm placeholder-gray-500"
                   />
                 </>
               )}
 
-              <button 
-                onClick={isLoginMode ? handleLogin : handleRegister}
-                className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg font-medium hover:opacity-90 transition-opacity text-white mt-4"
-              >
-                {isLoginMode ? t("sign_in") : t("register_account")}
-              </button>
+              {authForm.username === 'admin' ? (
+                <a 
+                  href="http://localhost:3001?admin=true"
+                  className="block w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg font-medium hover:opacity-90 transition-opacity text-white mt-4 text-center shadow-lg shadow-blue-500/25"
+                >
+                  Sign in to NMC Portal (Admin)
+                </a>
+              ) : (
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={isLoginMode ? handleLogin : handleRegister}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg font-medium hover:opacity-90 transition-opacity text-white mt-4 shadow-lg shadow-emerald-500/25"
+                >
+                  {isLoginMode ? t("sign_in") : (authForm.role === 'doctor' ? "Register & Verify via NMC" : t("register_account"))}
+                </motion.button>
+              )}
             </div>
 
-            <div className="mt-6 text-center text-sm text-gray-400">
-              {isLoginMode ? "Don't have an account? " : "Already have an account? "}
-              <button onClick={() => setIsLoginMode(!isLoginMode)} className="text-emerald-400 hover:underline">
-                {isLoginMode ? "Create one" : "Log in"}
+            <div className="mt-6 text-center text-sm text-gray-400 space-y-4 relative z-10">
+              <div>
+                {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+                <button onClick={() => setIsLoginMode(!isLoginMode)} className="text-emerald-400 font-medium hover:underline">
+                  {isLoginMode ? "Create one" : "Log in"}
+                </button>
+              </div>
+              
+              <button 
+                onClick={handleResetDevData} 
+                className="text-xs text-rose-400/70 hover:text-rose-400 font-medium transition-colors border border-rose-500/20 bg-rose-500/5 shadow-sm rounded-full px-3 py-1 hover:bg-rose-500/10"
+              >
+                Reset All Local Accounts (Dev)
               </button>
             </div>
-          </div>
-        ) : !account ? (
-           <div className="flex flex-col items-center justify-center py-32 text-center">
-            <div className="w-24 h-24 mb-8 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-3xl border border-white/10 flex items-center justify-center">
+            </motion.div>
+          ) : !account ? (
+             <motion.div 
+               key="connect"
+               initial={{ opacity: 0, y: 20 }}
+               animate={{ opacity: 1, y: 0 }}
+               exit={{ opacity: 0, y: -20 }}
+               className="flex flex-col items-center justify-center py-32 text-center"
+             >
+            <div className="w-24 h-24 mb-8 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-3xl border border-white/10 flex items-center justify-center shadow-lg">
               <Zap className="w-12 h-12 text-emerald-400" />
             </div>
-            <h2 className="text-4xl font-bold mb-4">{t("connect_your_wallet")}</h2>
-            <p className="text-gray-400 max-w-md text-lg">
+            <h2 className="text-4xl font-bold mb-4 text-white">{t("connect_your_wallet")}</h2>
+            <p className="text-gray-400 max-w-md text-lg font-medium">
               {t("logged_in_as")} {loggedInUser.username}, {t("wallet_missing_desc") || "but we need your Web3 wallet connected to interact with the blockchain."}
             </p>
-          </div>
-        ) : (
-          <div className="space-y-8">
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="dashboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="space-y-8"
+            >
             {loggedInUser.role === "patient" && <PatientDashboard contract={contract} marketplaceContract={marketplaceContract} account={account} />}
-            {loggedInUser.role === "doctor" && <DoctorDashboard contract={contract} account={account} />}
+            {loggedInUser.role === "doctor" && <DoctorDashboard contract={contract} account={account} username={loggedInUser.username} />}
             {loggedInUser.role === "researcher" && <ResearchDashboard marketplaceContract={marketplaceContract} tokenContract={tokenContract} account={account} />}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </main>
   );

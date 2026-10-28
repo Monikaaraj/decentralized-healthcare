@@ -20,7 +20,14 @@ async function main() {
   const DataMarketplace = await hre.ethers.getContractFactory("DataMarketplace");
   const marketplace = await DataMarketplace.deploy(tokenAddress);
   await marketplace.waitForDeployment();
-  console.log("DataMarketplace deployed to:", await marketplace.getAddress());
+  const marketplaceAddress = await marketplace.getAddress();
+  console.log("DataMarketplace deployed to:", marketplaceAddress);
+
+  // 4. Link MedicalConsent to DataMarketplace for 20% Doctor Royalty Distribution
+  const consentAddress = await consent.getAddress();
+  const linkTx = await marketplace.setMedicalConsent(consentAddress);
+  await linkTx.wait();
+  console.log("Linked MedicalConsent to DataMarketplace for 20% Doctor Royalties.");
 }
 
 main().catch((error) => {

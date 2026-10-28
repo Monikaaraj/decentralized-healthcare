@@ -18,6 +18,9 @@ sleep 3
 echo "⚙️ Deploying Smart Contracts to Localhost..."
 HARDHAT_DISABLE_TELEMETRY=true npx hardhat run scripts/deploy.js --network localhost
 
+echo "⛏️ Artificially mining 1000 blocks to prevent MetaMask caching errors..."
+curl -s -X POST --data '{"jsonrpc":"2.0","method":"hardhat_mine","params":["0x3E8"],"id":1}' -H "Content-Type: application/json" http://127.0.0.1:8545 > /dev/null
+
 # 3. Start Next.js frontend
 echo "🌐 Starting Next.js Frontend Server..."
 echo "👉 When it says 'Ready', open http://localhost:3000 in your browser!"

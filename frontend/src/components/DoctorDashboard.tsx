@@ -2,10 +2,11 @@
 import { useState } from "react";
 import { fetchFromIPFS, decryptData, encryptData, uploadToIPFS, derivePatientKey } from "@/utils/crypto";
 import { COMMON_MEDICINES } from "@/utils/medicines";
-import { FileSearch, LockOpen, UploadCloud, FileText, Search, PlusCircle, Trash2, Download } from "lucide-react";
+import { FileSearch, LockOpen, UploadCloud, FileText, Search, PlusCircle, Trash2, Download, Layers, ShieldCheck } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { buildMerkleRoot, hashPrescriptionLeaf } from "@/utils/merkle";
 
-export default function DoctorDashboard({ contract, account }: { contract: any; account: string }) {
+export default function DoctorDashboard({ contract, account, username }: { contract: any; account: string; username: string }) {
   const { t } = useLanguage();
   const [patientAddress, setPatientAddress] = useState("");
   const [decryptedData, setDecryptedData] = useState<string | null>(null);
@@ -13,7 +14,22 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
   const [records, setRecords] = useState<{id: number, cid: string, uploader: string}[]>([]);
 
   // Tab Navigation
-  const [activeTab, setActiveTab] = useState<"upload" | "view" | "prescription">("upload");
+  const [activeTab, setActiveTab] = useState<"upload" | "view" | "prescription" | "batch">("upload");
+
+  // Merkle Batch Queue State
+  interface QueuedPrescription {
+    id: string;
+    patientIdOrAddress: string;
+    resolvedAddress: string;
+    patientName: string;
+    cid: string;
+    timestamp: number;
+    medicinesSummary: string;
+  }
+  const [merkleQueue, setMerkleQueue] = useState<QueuedPrescription[]>([]);
+  const [batchStatus, setBatchStatus] = useState<string>("");
+  const [lastCommittedRoot, setLastCommittedRoot] = useState<string | null>(null);
+  const [isBatchCommitting, setIsBatchCommitting] = useState<boolean>(false);
 
   // Prescription State
   type Medicine = { name: string, morning: boolean, afternoon: boolean, night: boolean, notes: string };
@@ -75,7 +91,7 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
       const cid = await uploadToIPFS(encrypted);
       
       setUploadStatus("Anchoring to blockchain on behalf of patient...");
-      const tx = await contract.addRecordForPatient(resolvedAddress, cid);
+      const tx = await contract.addRecordForPatient(resolvedAddress, cid, username);
       await tx.wait();
       setUploadStatus(`Success! Record anchored to ${uploadPatientAddress}.`);
     } catch (err: any) {
@@ -260,16 +276,88 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
       return;
     }
 
-    // Redirect to Upload Tab and pre-fill data
-    setUploadFileData(pendingPdfData);
-    setUploadPatientAddress(rxPatientName);
-    setActiveTab("upload");
-    setUploadStatus("Prescription ready for upload. Please confirm Patient ID and click Encrypt & Upload.");
+    // Encrypt and add to Merkle Tree Batch Queue
+    setStatus("Encrypting prescription with patient key and staging to Merkle Queue...");
+    try {
+      const resolved = resolveAddress(rxPatientName);
+      const masterKey = derivePatientKey(resolved);
+      const encrypted = encryptData(pendingPdfData, masterKey);
+      
+      const cid = await uploadToIPFS(encrypted);
+      const medSummary = medicines.map(m => m.name).filter(Boolean).join(", ");
+
+      const newQueued: QueuedPrescription = {
+        id: `rx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        patientIdOrAddress: rxPatientName,
+        resolvedAddress: resolved,
+        patientName: rxPatientName,
+        cid: cid,
+        timestamp: Math.floor(Date.now() / 1000),
+        medicinesSummary: medSummary || "General Prescription"
+      };
+
+      setMerkleQueue(prev => [...prev, newQueued]);
+      setActiveTab("batch");
+      setBatchStatus(`Prescription for ${rxPatientName} added to Merkle Batch Queue! Anchor when ready.`);
+    } catch (e: any) {
+      console.error(e);
+      setStatus("Error staging prescription to Merkle Batch.");
+    }
+
     setPendingPdfData(null);
   };
 
+  const handleCommitMerkleBatch = async () => {
+    if (!contract || merkleQueue.length === 0) return;
+    setIsBatchCommitting(true);
+    setBatchStatus("Constructing Merkle Tree from all staged prescriptions...");
+
+    try {
+      // 1. Compute leaf hashes
+      const leaves = merkleQueue.map(item =>
+        hashPrescriptionLeaf({
+          patient: item.resolvedAddress,
+          cid: item.cid,
+          timestamp: item.timestamp
+        }, item.timestamp)
+      );
+
+      // 2. Generate 32-byte Merkle Root
+      const merkleRoot = buildMerkleRoot(leaves);
+      const patientAddresses = merkleQueue.map(item => item.resolvedAddress);
+      const cids = merkleQueue.map(item => item.cid);
+
+      setBatchStatus(`Merkle Root: ${merkleRoot.substring(0, 14)}... Anchoring on-chain to patient vaults...`);
+
+      // 3. One single transaction anchors Merkle Root and puts records in each patient's vault!
+      const tx = await contract.commitMerkleBatch(
+        merkleRoot,
+        patientAddresses,
+        cids,
+        username
+      );
+      await tx.wait();
+
+      setLastCommittedRoot(merkleRoot);
+      setBatchStatus(`🎉 Success! Merkle Tree batch (${merkleQueue.length} prescriptions) anchored on-chain! Distributed directly to all patient accounts.`);
+      setMerkleQueue([]);
+    } catch (err: any) {
+      console.error(err);
+      setBatchStatus(`❌ Batch failed: ${err.message || "Ensure patients have granted consent."}`);
+    } finally {
+      setIsBatchCommitting(false);
+    }
+  };
+
+  const handleRemoveFromQueue = (id: string) => {
+    setMerkleQueue(prev => prev.filter(item => item.id !== id));
+  };
+
   return (
-    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl">
+    <div className="p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+      {/* Animated soft border effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />
+      <div className="relative z-10">
       <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
         <FileSearch className="text-blue-400" /> {t("doctor_portal")}
       </h2>
@@ -293,6 +381,18 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${activeTab === "prescription" ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30 shadow-lg shadow-purple-500/20' : 'text-gray-400 hover:bg-white/5'}`}
         >
           <FileText size={18} /> <span className="hidden sm:inline">{t("create_prescription")}</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab("batch")}
+          className={`flex-1 min-w-[140px] py-3 px-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 relative ${activeTab === "batch" ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-lg shadow-amber-500/20' : 'text-gray-400 hover:bg-white/5'}`}
+        >
+          <Layers size={18} />
+          <span>Merkle Batch Queue</span>
+          {merkleQueue.length > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500 text-black ml-1 animate-pulse">
+              {merkleQueue.length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -497,6 +597,94 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
             {status && <div className="mt-6 p-4 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-300">{status}</div>}
           </div>
         )}
+
+        {/* Merkle Batch Queue Tab */}
+        {activeTab === "batch" && (
+          <div className="p-6 bg-white/5 rounded-xl border border-amber-500/30 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-bold flex items-center gap-2 text-amber-400">
+                  <Layers size={22} /> Merkle Tree Batch Queue (Zero-Friction Doctor Anchor)
+                </h3>
+                <p className="text-gray-400 text-xs mt-1">
+                  Queue all prescriptions written throughout your shift. Anchor them to the blockchain in <strong className="text-white">1 single transaction</strong> via an on-chain Merkle Root. Each patient receives their encrypted prescription in their personal vault!
+                </p>
+              </div>
+
+              {merkleQueue.length > 0 && (
+                <button
+                  onClick={handleCommitMerkleBatch}
+                  disabled={isBatchCommitting}
+                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold rounded-xl shadow-lg shadow-amber-500/20 text-xs flex items-center gap-2 transition-all disabled:opacity-50 whitespace-nowrap"
+                >
+                  <ShieldCheck size={16} />
+                  {isBatchCommitting ? "Anchoring Merkle Tree..." : `🚀 Anchor ${merkleQueue.length} Prescriptions (1 Tx)`}
+                </button>
+              )}
+            </div>
+
+            {batchStatus && (
+              <div className="p-4 mb-6 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs font-mono leading-relaxed">
+                {batchStatus}
+              </div>
+            )}
+
+            {lastCommittedRoot && (
+              <div className="p-4 mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                <span className="text-xs text-emerald-400 font-bold">Latest Merkle Root Anchored On-Chain:</span>
+                <p className="font-mono text-[11px] text-white mt-1 break-all bg-black/40 p-2 rounded">
+                  {lastCommittedRoot}
+                </p>
+              </div>
+            )}
+
+            {merkleQueue.length === 0 ? (
+              <div className="py-12 text-center border-2 border-dashed border-white/10 rounded-xl bg-black/20">
+                <Layers className="mx-auto text-gray-500 mb-3" size={36} />
+                <p className="text-gray-400 text-sm font-medium">Merkle Batch Queue is currently empty.</p>
+                <p className="text-gray-500 text-xs mt-1">
+                  Create prescriptions in the <strong className="text-purple-400">"Create Prescription"</strong> tab — they will be staged here automatically!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-xs text-gray-400 font-semibold mb-2">
+                  Staged Prescriptions ({merkleQueue.length}) ready for single Merkle root commitment:
+                </div>
+                {merkleQueue.map((item, index) => (
+                  <div key={item.id} className="p-4 bg-black/40 border border-white/10 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-amber-500/40 transition-colors">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Leaf #{index + 1}
+                        </span>
+                        <span className="text-sm font-bold text-white">{item.patientName}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 font-mono">
+                        Target Vault: {item.resolvedAddress.substring(0, 10)}...{item.resolvedAddress.substring(36)}
+                      </p>
+                      <p className="text-xs text-indigo-300 mt-1">
+                        Medicines: <span className="text-gray-300">{item.medicinesSummary}</span>
+                      </p>
+                      <p className="text-[11px] text-emerald-400 font-mono mt-1 truncate" title={item.cid}>
+                        IPFS CID: {item.cid}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleRemoveFromQueue(item.id)}
+                      className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors text-xs flex items-center gap-1"
+                      title="Remove from batch"
+                    >
+                      <Trash2 size={16} />
+                      <span className="sm:hidden">Remove</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Premium Upload Confirmation Modal */}
@@ -535,6 +723,7 @@ export default function DoctorDashboard({ contract, account }: { contract: any; 
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
