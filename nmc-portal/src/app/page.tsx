@@ -232,9 +232,10 @@ function NMCContent() {
       await tx.wait();
       setHasApplied(true);
       alert("Application submitted to NMC!");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Transaction failed");
+      const reason = e?.reason || e?.data?.message || e?.message || "Transaction failed";
+      alert("Submission Error: " + reason);
     }
   };
 
@@ -252,9 +253,10 @@ function NMCContent() {
       await tx.wait();
       setResHasApplied(true);
       alert("Researcher Application submitted to ICMR / Review Board!");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Transaction failed");
+      const reason = e?.reason || e?.data?.message || e?.message || "Transaction failed";
+      alert("Submission Error: " + reason);
     }
   };
 

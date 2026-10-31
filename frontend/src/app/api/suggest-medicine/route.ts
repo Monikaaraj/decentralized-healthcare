@@ -26,7 +26,7 @@ Return EXACTLY a comma-separated list of names and NOTHING else. Do not use quot
 Example output: Paracetamol, Pantoprazole, Penicillin`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
     });
 
