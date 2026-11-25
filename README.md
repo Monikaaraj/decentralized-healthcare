@@ -24,20 +24,97 @@
 
 ---
 
+## 👥 Team Roles, Ownership & Modular Division of Work
+
+To ensure clean software architecture and strict separation of concerns, the AEGIS-AI ecosystem is divided into specialized modules owned by **Member 1** and **Member 2**, in strict adherence to our project governance guidelines ([`AGENTS.md`](file:///c:/Users/monik/decentralized-healthcare/aegis-blockchain-test/AGENTS.md)):
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                       TEAM OWNERSHIP MATRIX                                            │
+├───────────────────────────────────┬───────────────────────────────────┬────────────────────────────────┤
+│ MODULE / DOMAIN                   │ PRIMARY OWNER                     │ OWNED DIRECTORIES              │
+├───────────────────────────────────┼───────────────────────────────────┼────────────────────────────────┤
+│ Blockchain & Smart Contracts      │ Member 1                          │ contracts/                     │
+│ Encryption & IPFS Decentralization│ Member 1                          │ backend/, contracts/           │
+│ Consent Management Protocol       │ Member 1                          │ contracts/                     │
+│ Token Economy & Marketplace       │ Member 1                          │ contracts/, backend/           │
+│ Node / Python Backend Services    │ Member 1                          │ backend/                       │
+├───────────────────────────────────┼───────────────────────────────────┼────────────────────────────────┤
+│ Federated Learning Core (FedAvg)  │ Member 2                          │ ai/                            │
+│ Disease Risk Prediction Models    │ Member 2                          │ ai/                            │
+│ Clinical Anomaly Detection Engine │ Member 2                          │ ai/                            │
+│ Synthetic Cohort Generation       │ Member 2                          │ ai/data/                       │
+│ FastAPI Model Inference Layer     │ Member 2                          │ ai/api/                        │
+│ Next.js & React Web Dashboards    │ Member 2                          │ frontend/                      │
+├───────────────────────────────────┼───────────────────────────────────┼────────────────────────────────┤
+│ Regulatory Verification Portal    │ Shared (Member 1 & Member 2)      │ nmc-portal/                    │
+│ Decentralized Node Orchestrator   │ Shared (Member 1 & Member 2)      │ federated_engine/              │
+│ Documentation & Testing Suite     │ Shared (Member 1 & Member 2)      │ docs/, tests/, README.md       │
+└───────────────────────────────────┴───────────────────────────────────┴────────────────────────────────┘
+```
+
+### 🔹 Member 1 Technical Deliverables (Blockchain, Cryptography & Backend)
+* **Solidity Smart Contracts (`contracts/contracts/`):**
+  * `MedicalConsent.sol`: Designed the on-chain consent registry (`consent[patient][doctor]`), patient record mapping, Merkle tree batch storage, and NMC doctor / ICMR researcher verification registries.
+  * `HealthToken.sol`: Created the ERC-20 utility token (`HLTH`) with a 1,000,000 token initial mint and a public testing faucet (`requestTokens()`).
+  * `DataMarketplace.sol`: Architected the research data bounty marketplace with token escrow and the automated **20% doctor royalty distribution algorithm** (`DOCTOR_ROYALTY_BPS = 2000`).
+* **Polygon & Hardhat Infrastructure (`contracts/`):**
+  * Configured Hardhat for local development (port 8545) and Polygon testnet (Amoy / Sepolia).
+  * Authored deterministic contract deployment scripts (`scripts/deploy.js`) with automatic cross-contract address binding.
+* **Decentralized Storage & Cryptography:**
+  * Client-side AES-256 symmetric encryption of medical records prior to upload.
+  * IPFS integration for immutable Content Identifier (CID) generation and off-chain storage.
+  * Merkle Tree leaf packaging on-chain with OpenZeppelin `MerkleProof` verification.
+* **Backend Services (`backend/`):**
+  * Built FastAPI backend (`backend/main.py`) running OCR text extraction (`ocr.py`) via Tesseract.
+  * Created the initial Flower federated learning simulation orchestrator (`fl_server.py`, `fl_client_node.py`).
+  * Authored automated multi-process orchestration scripts (`start-all.sh`, `run_all.ps1`).
+
+---
+
+### 🔹 Member 2 Technical Deliverables (AI Diagnostics, Federated Learning & Frontend)
+* **Federated Learning Engine (`ai/`):**
+  * Designed the Flower (`flwr`) multi-silo training architecture executing Federated Averaging (FedAvg).
+  * Built the non-IID clinical data partitioner (`ai/src/run_partition.py`) distributing records across simulated hospital silos (**Hospital A, Hospital B, Hospital C**).
+  * Authored `ai/data/generate_dataset.py` generating 1,000 mathematically validated synthetic patient cohorts with realistic physiological distributions (age, glucose, blood pressure, BMI, cholesterol, heart rate).
+* **AI Diagnostics & Anomaly Detection Models:**
+  * Trained and exported the global aggregated risk prediction model (`ai/models/federated_risk_model.joblib`).
+  * Implemented unsupervised Isolation Forest anomaly detection (`ai/src/train_anomaly.py`, `ai/models/anomaly_model.joblib`) for clinical outlier and vitals corruption detection.
+  * Created the dedicated FastAPI inference layer (`ai/api/main.py`) serving `/ai/health`, `/ai/predict/risk`, and `/ai/detect/anomaly`.
+* **Frontend Web Application (`frontend/`):**
+  * Built the entire Next.js 16 + React 19 web application with Tailwind CSS.
+  * **Patient Dashboard:** Encrypted health records vault, live consent management toggles, HealthToken wallet with faucet claim, research bounty fulfillment, and Gemini AI health assistant.
+  * **Doctor Dashboard:** Prescription management, OCR digitizer, Merkle tree batching interface, NMC license badge, and live 20% royalty tracker.
+  * **Research Dashboard:** ICMR/IRB accreditation check, bounty creation with token escrow, live federated learning training monitor with round-by-round accuracy curves, and model `.joblib` download.
+  * **Interactive 3D Graphics:** Developed `Hero3D.tsx` utilizing Three.js and `@react-three/fiber` for a modern medical WebGL hero canvas.
+  * **Clinical Copilot:** Integrated Google Gemini 3.8 Flash (`@google/genai`) for plain-language medical document explanation and symptom triage (`/api/analyze`, `/api/suggest-medicine`).
+  * **Merkle & Privacy Utilities:** Developed pure Ethers Merkle Tree builder (`frontend/src/utils/merkle.ts`) and PPML privacy masking / age bucketing algorithms (`frontend/src/utils/privacy.ts`).
+  * **Multi-Language Localization:** Built real-time language switcher supporting 7 Indian languages (English, Hindi, Tamil, Telugu, Bengali, Marathi, Kannada).
+
+---
+
+### 🔹 Collaborative Integration (Shared Deliverables)
+* **NMC / ICMR Regulatory Portal (`nmc-portal/`):** Jointly developed standalone Next.js portal on port 3001 enabling regulatory authorities to approve or reject doctors and researchers on Polygon.
+* **Federated Node API (`federated_engine/`):** Unified inter-silo weight distribution API (`node_api.py`), local PyTorch silo trainer (`local_trainer.py`), and multi-format OCR ingest pipeline (`ocr_extractor.py`).
+* **Quality Assurance & Verification (`tests/`):** Comprehensive automated test coverage spanning smart contracts (`npx hardhat test`), federated learning rounds, and REST API integration.
+
+---
+
 ## 📑 Table of Contents
-1. [Executive Summary & Problem Statement](#-executive-summary--problem-statement)
-2. [Core Platform Capabilities](#-core-platform-capabilities)
-3. [End-to-End System Architecture](#-end-to-end-system-architecture)
-4. [Smart Contracts & On-Chain Governance](#-smart-contracts--on-chain-governance)
-5. [Cryptography, Merkle Trees & PPML Privacy](#-cryptography-merkle-trees--ppml-privacy)
-6. [Federated Learning & AI Diagnostics Engine](#-federated-learning--ai-diagnostics-engine)
-7. [Multi-Portal Web Ecosystem](#-multi-portal-web-ecosystem)
-8. [Complete REST API Reference](#-complete-rest-api-reference)
-9. [Project Directory Structure](#-project-directory-structure)
-10. [Step-by-Step Installation & Local Execution](#-step-by-step-installation--local-execution)
-11. [Testing & Verification Suite](#-testing--verification-suite)
-12. [Ethical AI, Compliance & AGENTS.md Guarantees](#-ethical-ai-compliance--agentsmd-guarantees)
-13. [Evaluation Metrics & Comparative Benchmarks](#-evaluation-metrics--comparative-benchmarks)
+1. [Team Roles & Modular Division of Work (Member 1 vs. Member 2)](#-team-roles-ownership--modular-division-of-work)
+2. [Executive Summary & Problem Statement](#-executive-summary--problem-statement)
+3. [Core Platform Capabilities](#-core-platform-capabilities)
+4. [End-to-End System Architecture](#-end-to-end-system-architecture)
+5. [Smart Contracts & On-Chain Governance](#-smart-contracts--on-chain-governance)
+6. [Cryptography, Merkle Trees & PPML Privacy](#-cryptography-merkle-trees--ppml-privacy)
+7. [Federated Learning & AI Diagnostics Engine](#-federated-learning--ai-diagnostics-engine)
+8. [Multi-Portal Web Ecosystem](#-multi-portal-web-ecosystem)
+9. [Complete REST API Reference](#-complete-rest-api-reference)
+10. [Project Directory Structure](#-project-directory-structure)
+11. [Step-by-Step Installation & Local Execution](#-step-by-step-installation--local-execution)
+12. [Testing & Verification Suite](#-testing--verification-suite)
+13. [Ethical AI, Compliance & AGENTS.md Guarantees](#-ethical-ai-compliance--agentsmd-guarantees)
+14. [Evaluation Metrics & Comparative Benchmarks](#-evaluation-metrics--comparative-benchmarks)
 
 ---
 
