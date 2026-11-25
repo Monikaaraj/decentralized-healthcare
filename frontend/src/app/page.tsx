@@ -9,6 +9,9 @@ import { Activity, ShieldCheck, Zap, Globe, ChevronDown } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import Hero3D from "@/components/Hero3D";
+import MerkleBatchUI from "@/components/MerkleBatchUI";
+import FederatedLearningUI from "@/components/FederatedLearningUI";
+import MarketplaceUI from "@/components/MarketplaceUI";
 
 // Mock ABI for the MedicalConsent contract
 const CONTRACT_ABI = [
@@ -23,10 +26,14 @@ const CONTRACT_ABI = [
   "function getRecord(address _patient, uint256 _recordId) external view returns (string memory cid, address uploader, uint256 timestamp)",
   "function getRecordCount(address _patient) external view returns (uint256)",
   "function doctorProfiles(string) public view returns (string username, string name, string licenseNumber, bool hasApplied, bool isApproved, bool isRejected)",
+  "function researcherProfiles(string) public view returns (string username, string name, string institution, string researchId, bool hasApplied, bool isApproved, bool isRejected)",
   "function resetDevData() external",
   "event DoctorApplied(string username, string name, string licenseNumber)",
   "event DoctorVerified(string username)",
   "event DoctorRejected(string username)",
+  "event ResearcherApplied(string username, string name, string institution, string researchId)",
+  "event ResearcherVerified(string username)",
+  "event ResearcherRejected(string username)",
   "event DevDataReset()"
 ];
 
@@ -48,10 +55,10 @@ const TOKEN_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// Addresses from Local Hardhat Node
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; 
-const TOKEN_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const MARKETPLACE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+// Contract addresses — set via env vars (Vercel/production) or fallback to local Hardhat
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_ADDRESS ?? "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+const MARKETPLACE_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_ADDRESS ?? "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
 
 export default function Home() {
   const [account, setAccount] = useState<string>("");
@@ -122,6 +129,8 @@ export default function Home() {
     
     if (authForm.role === 'doctor') {
       window.open(`http://localhost:3001?doctor=${authForm.username}`, "_blank");
+    } else if (authForm.role === 'researcher') {
+      window.open(`http://localhost:3001?researcher=${authForm.username}`, "_blank");
     }
   };
 
@@ -452,7 +461,7 @@ export default function Home() {
             >
             {loggedInUser.role === "patient" && <PatientDashboard contract={contract} marketplaceContract={marketplaceContract} account={account} />}
             {loggedInUser.role === "doctor" && <DoctorDashboard contract={contract} account={account} username={loggedInUser.username} />}
-            {loggedInUser.role === "researcher" && <ResearchDashboard marketplaceContract={marketplaceContract} tokenContract={tokenContract} account={account} />}
+            {loggedInUser.role === "researcher" && <ResearchDashboard contract={contract} marketplaceContract={marketplaceContract} tokenContract={tokenContract} account={account} username={loggedInUser.username} />}
             </motion.div>
           )}
         </AnimatePresence>

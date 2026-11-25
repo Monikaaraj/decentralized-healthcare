@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react';
 import { ethers } from "ethers";
 import { maskAge, maskWalletAddress } from "@/utils/privacy";
 
-export default function ResearchDashboard({ marketplaceContract, tokenContract, account }: { marketplaceContract: any; tokenContract: any; account: string }) {
+export default function ResearchDashboard({ contract, marketplaceContract, tokenContract, account, username }: { contract?: any; marketplaceContract: any; tokenContract: any; account: string; username?: string }) {
   const [flStatus, setFlStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Researcher Verification Status via ICMR / IRB
+  const [verificationStatus, setVerificationStatus] = useState<{ hasApplied: boolean; isApproved: boolean; isRejected: boolean; institution?: string }>({
+    hasApplied: false,
+    isApproved: false,
+    isRejected: false
+  });
   
   // Marketplace State
   const [hlthBalance, setHlthBalance] = useState<string>("0");
@@ -85,14 +92,47 @@ export default function ResearchDashboard({ marketplaceContract, tokenContract, 
     }
   };
 
+  const checkResearcherVerification = async () => {
+    if (!contract || !username) return;
+    try {
+      const profile = await contract.researcherProfiles(username);
+      setVerificationStatus({
+        hasApplied: profile.hasApplied,
+        isApproved: profile.isApproved,
+        isRejected: profile.isRejected,
+        institution: profile.institution
+      });
+    } catch (e) {
+      console.error("Failed to check researcher verification:", e);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
     fetchMarketplaceData();
+    checkResearcherVerification();
+
+    if (contract && username) {
+      const onVerified = (uname: string) => {
+        if (uname.toLowerCase() === username.toLowerCase()) checkResearcherVerification();
+      };
+      const onRejected = (uname: string) => {
+        if (uname.toLowerCase() === username.toLowerCase()) checkResearcherVerification();
+      };
+      contract.on("ResearcherVerified", onVerified);
+      contract.on("ResearcherRejected", onRejected);
+      return () => {
+        contract.off("ResearcherVerified", onVerified);
+        contract.off("ResearcherRejected", onRejected);
+      };
+    }
+
     const interval = setInterval(() => {
       fetchStatus();
-    }, 2000);
+      checkResearcherVerification();
+    }, 4000);
     return () => clearInterval(interval);
-  }, [marketplaceContract, tokenContract, account]);
+  }, [marketplaceContract, tokenContract, account, contract, username]);
 
   const startTraining = async () => {
     setLoading(true);
@@ -249,6 +289,57 @@ Remarks: Maintain current hydration and balanced diet.`;
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in duration-500">
       
+      {/* --- Researcher Blockchain Verification Status Banner --- */}
+      <div className={`p-6 rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-all duration-300 shadow-xl ${
+        verificationStatus.isApproved 
+          ? "bg-purple-950/20 border-purple-500/40 text-purple-200" 
+          : verificationStatus.hasApplied && !verificationStatus.isRejected
+          ? "bg-amber-950/20 border-amber-500/40 text-amber-200"
+          : verificationStatus.isRejected
+          ? "bg-red-950/20 border-red-500/40 text-red-200"
+          : "bg-gradient-to-r from-purple-900/30 via-indigo-900/20 to-slate-900/40 border-purple-500/30 text-slate-200"
+      }`}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">🔬</span>
+              <h3 className="font-bold text-lg text-white">
+                {verificationStatus.isApproved 
+                  ? "Verified Clinical Researcher (IRB / ICMR Approved)" 
+                  : verificationStatus.hasApplied && !verificationStatus.isRejected
+                  ? "IRB Ethics Review In Progress"
+                  : verificationStatus.isRejected
+                  ? "Ethics Review Application Rejected"
+                  : "Researcher Verification Required"}
+              </h3>
+            </div>
+            <p className="text-sm opacity-85">
+              {verificationStatus.isApproved 
+                ? `Authorized Institution: ${verificationStatus.institution || "Verified Medical AI Institution"}. You hold verified blockchain credentials to deploy Federated AI models and commission data bounties.`
+                : verificationStatus.hasApplied && !verificationStatus.isRejected
+                ? "Your research credentials and IRB trial IDs are currently under review by the Ethics Committee. You may prepare bounties, but full network consensus validation requires active approval."
+                : verificationStatus.isRejected
+                ? "Your verification application was rejected by the Ethics Review Board. Please verify your institution credentials."
+                : "Apply for Institutional Review Board (IRB) / Ethics Committee verification on-chain to unlock full decentralized research capabilities."}
+            </p>
+          </div>
+          <div>
+            <a
+              href={`http://localhost:3001?researcher=${username || "researcher"}`}
+              target="_blank"
+              rel="noreferrer"
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-md inline-block whitespace-nowrap ${
+                verificationStatus.isApproved
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30"
+                  : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30"
+              }`}
+            >
+              {verificationStatus.isApproved ? "View On-Chain Credentials ↗" : "Verify Researcher Credentials ↗"}
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* --- Data Marketplace Section --- */}
       <div className="bg-white/5 border border-indigo-500/30 p-8 rounded-2xl backdrop-blur-xl relative overflow-hidden group shadow-2xl">
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-indigo-500/10 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 blur-xl pointer-events-none" />

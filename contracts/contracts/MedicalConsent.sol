@@ -40,6 +40,20 @@ contract MedicalConsent is Ownable {
     mapping(string => DoctorApplication) public doctorProfiles;
     string[] public doctorUsernames;
 
+    // Struct for Researcher Verification via ICMR / Institutional Review Board (IRB)
+    struct ResearcherApplication {
+        string username;
+        string name;
+        string institution;
+        string researchId;
+        bool hasApplied;
+        bool isApproved;
+        bool isRejected;
+    }
+
+    mapping(string => ResearcherApplication) public researcherProfiles;
+    string[] public researcherUsernames;
+
     // Merkle Tree Batch Storage
     struct MerkleBatch {
         bytes32 root;
@@ -59,6 +73,9 @@ contract MedicalConsent is Ownable {
     event DoctorApplied(string username, string name, string licenseNumber);
     event DoctorVerified(string username);
     event DoctorRejected(string username);
+    event ResearcherApplied(string username, string name, string institution, string researchId);
+    event ResearcherVerified(string username);
+    event ResearcherRejected(string username);
     event DevDataReset();
 
     constructor() Ownable(msg.sender) {}
@@ -245,12 +262,59 @@ contract MedicalConsent is Ownable {
         return doctorUsernames;
     }
 
+    // Apply for Researcher / IRB Verification
+    function applyForResearcherVerification(
+        string memory _username,
+        string memory _name,
+        string memory _institution,
+        string memory _researchId
+    ) external {
+        require(!researcherProfiles[_username].hasApplied, "Already applied");
+        researcherProfiles[_username] = ResearcherApplication({
+            username: _username,
+            name: _name,
+            institution: _institution,
+            researchId: _researchId,
+            hasApplied: true,
+            isApproved: false,
+            isRejected: false
+        });
+        researcherUsernames.push(_username);
+        emit ResearcherApplied(_username, _name, _institution, _researchId);
+    }
+
+    // Admin approves a researcher
+    function approveResearcher(string memory _username) external onlyOwner {
+        require(researcherProfiles[_username].hasApplied, "Researcher has not applied");
+        researcherProfiles[_username].isApproved = true;
+        researcherProfiles[_username].isRejected = false;
+        emit ResearcherVerified(_username);
+    }
+
+    // Admin rejects a researcher
+    function rejectResearcher(string memory _username) external onlyOwner {
+        require(researcherProfiles[_username].hasApplied, "Researcher has not applied");
+        researcherProfiles[_username].isApproved = false;
+        researcherProfiles[_username].isRejected = true;
+        emit ResearcherRejected(_username);
+    }
+
+    // Fetch all researcher usernames
+    function getAllResearchers() external view returns (string[] memory) {
+        return researcherUsernames;
+    }
+
     // Dev utility: Reset all data
     function resetDevData() external {
         for (uint i = 0; i < doctorUsernames.length; i++) {
             delete doctorProfiles[doctorUsernames[i]];
         }
         delete doctorUsernames;
+
+        for (uint i = 0; i < researcherUsernames.length; i++) {
+            delete researcherProfiles[researcherUsernames[i]];
+        }
+        delete researcherUsernames;
 
         emit DevDataReset();
     }
